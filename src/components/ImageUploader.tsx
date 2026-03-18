@@ -86,35 +86,35 @@ export default function ImageUploader({ onComplete }: { onComplete?: () => void 
     <div className="space-y-6 flex flex-col h-full">
       <div 
         {...getRootProps()} 
-        className={`border-2 border-dashed rounded-[1.5rem] sm:rounded-[2rem] p-6 sm:p-10 text-center cursor-pointer transition-all duration-300 flex-1 flex flex-col justify-center min-h-[300px] ${
+        className={`border-2 border-dashed rounded-[1.5rem] p-6 sm:p-8 text-center cursor-pointer transition-all duration-300 flex-1 flex flex-col justify-center min-h-[250px] ${
           isDragActive 
             ? 'border-blue-500 bg-blue-500/10 scale-[0.98]' 
             : 'border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/50'
         }`}
       >
         <input {...getInputProps()} />
-        <div className="flex flex-col items-center justify-center space-y-6">
+        <div className="flex flex-col items-center justify-center space-y-4">
           <div className="relative">
             {uploading ? (
-              <div className="w-20 h-20 flex items-center justify-center">
-                <Loader2 className="w-12 h-12 text-blue-500 animate-spin" strokeWidth={1.5} />
+              <div className="w-16 h-16 flex items-center justify-center">
+                <Loader2 className="w-10 h-10 text-blue-500 animate-spin" strokeWidth={1.5} />
               </div>
             ) : (
               <motion.div 
                 initial={{ scale: 0.8 }}
                 animate={{ scale: 1 }}
-                className="w-20 h-20 bg-blue-600/20 text-blue-400 rounded-[1.5rem] flex items-center justify-center shadow-lg shadow-blue-900/10"
+                className="w-16 h-16 bg-blue-600/20 text-blue-400 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-900/10"
               >
-                <UploadCloud size={36} strokeWidth={1.5} />
+                <UploadCloud size={32} strokeWidth={1.5} />
               </motion.div>
             )}
           </div>
           
-          <div className="space-y-2">
-            <p className="text-lg sm:text-xl font-bold text-white">
+          <div className="space-y-1.5">
+            <p className="text-lg font-bold text-white">
               {uploading ? 'Protegendo Arquivos...' : 'Adicionar Fotos'}
             </p>
-            <p className="text-zinc-400 text-xs sm:text-sm max-w-[200px] mx-auto leading-relaxed">
+            <p className="text-zinc-400 text-sm max-w-[220px] mx-auto leading-relaxed">
               {uploading 
                 ? 'Criptografando suas fotos localmente antes do envio.' 
                 : 'Arraste fotos aqui ou toque para selecionar do dispositivo.'}
@@ -123,7 +123,7 @@ export default function ImageUploader({ onComplete }: { onComplete?: () => void 
           
           {!uploading && (
             <div className="pt-2">
-              <span className="px-5 py-2.5 bg-zinc-800 text-zinc-300 text-xs sm:text-sm font-bold rounded-full uppercase tracking-wider whitespace-nowrap inline-block">
+              <span className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-full transition-colors inline-block">
                 Selecionar Arquivos
               </span>
             </div>

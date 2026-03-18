@@ -38,9 +38,7 @@ export default function Gallery() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [showControls, setShowControls] = useState(true);
-  const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
   const decryptedCache = useRef<Map<string, string>>(new Map());
-  const modalRef = useRef<HTMLDivElement>(null);
 
   const showToast = (message: string, type: ToastType = 'success') => {
     setToast({ message, type });
@@ -50,29 +48,6 @@ export default function Gallery() {
     // Clear cache when cryptoKey changes to avoid using wrong key for old data
     decryptedCache.current.clear();
   }, [cryptoKey]);
-
-  const toggleNativeFullscreen = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!document.fullscreenElement) {
-      try {
-        await modalRef.current?.requestFullscreen();
-        setIsNativeFullscreen(true);
-      } catch (err: any) {
-        console.error(`Erro ao entrar em tela cheia: ${err.message}`);
-      }
-    } else {
-      document.exitFullscreen();
-      setIsNativeFullscreen(false);
-    }
-  };
-
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsNativeFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
 
   useEffect(() => {
     let timeout: NodeJS.Timeout;
@@ -345,18 +320,18 @@ export default function Gallery() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-6"
+            className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-6"
           >
             <div
               onClick={() => setIsUploaderOpen(false)}
               className="absolute inset-0 bg-black/80 backdrop-blur-sm"
             />
             <motion.div
-              initial={{ scale: 0.95, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="relative w-full max-w-lg bg-zinc-900 md:rounded-3xl shadow-2xl overflow-hidden border-0 md:border border-zinc-800 flex flex-col h-[100dvh] md:h-auto md:max-h-[90vh]"
+              className="relative w-full max-w-lg bg-zinc-900 rounded-t-[2rem] md:rounded-[2rem] shadow-2xl overflow-hidden border-t md:border border-zinc-800 flex flex-col h-[85dvh] md:h-auto md:max-h-[90vh]"
             >
               <div className="p-4 sm:p-6 border-b border-zinc-800 flex items-center justify-between shrink-0">
                 <h2 className="text-lg font-semibold text-zinc-100">Adicionar Fotos</h2>
@@ -379,15 +354,11 @@ export default function Gallery() {
         {selectedImage && (
           <motion.div
             key="fullscreen-image"
-            ref={modalRef}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-black flex items-center justify-center p-0"
             onClick={() => {
-              if (document.fullscreenElement) {
-                document.exitFullscreen();
-              }
               setSelectedImage(null);
               setSelectedImageId(null);
               const url = new URL(window.location.href);
@@ -403,13 +374,6 @@ export default function Gallery() {
                   exit={{ opacity: 0, y: -20 }}
                   className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-2 sm:gap-4 z-10"
                 >
-                  <button
-                    onClick={toggleNativeFullscreen}
-                    className="text-white/70 hover:text-white transition-colors p-2 sm:p-3 bg-black/40 backdrop-blur-md rounded-full hover:bg-black/60 active:scale-90"
-                    title={isNativeFullscreen ? "Sair da Tela Cheia" : "Tela Cheia"}
-                  >
-                    <Maximize2 size={20} className="sm:w-6 sm:h-6" />
-                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -436,9 +400,6 @@ export default function Gallery() {
                     className="text-white/70 hover:text-white transition-colors p-2 sm:p-3 bg-black/40 backdrop-blur-md rounded-full hover:bg-black/60 active:scale-90"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (document.fullscreenElement) {
-                        document.exitFullscreen();
-                      }
                       setSelectedImage(null);
                       setSelectedImageId(null);
                       // Remove query param
@@ -474,7 +435,7 @@ export default function Gallery() {
                     exit={{ scale: 0.9, opacity: 0 }}
                     src={selectedImage}
                     alt="Full screen"
-                    className={`w-full h-full select-none cursor-grab active:cursor-grabbing transition-all duration-300 ${isNativeFullscreen ? 'object-cover' : 'object-contain'}`}
+                    className="w-full h-full select-none cursor-grab active:cursor-grabbing transition-all duration-300 object-contain"
                     onContextMenu={(e) => e.preventDefault()}
                     draggable={false}
                   />
