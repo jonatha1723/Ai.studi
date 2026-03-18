@@ -86,10 +86,10 @@ export default function ImageUploader({ onComplete }: { onComplete?: () => void 
     <div className="space-y-6 flex flex-col h-full">
       <div 
         {...getRootProps()} 
-        className={`border-2 border-dashed rounded-[1.5rem] p-6 sm:p-8 text-center cursor-pointer transition-all duration-300 flex-1 flex flex-col justify-center min-h-[250px] ${
+        className={`border border-dashed rounded-[1.5rem] p-6 sm:p-8 text-center cursor-pointer transition-all duration-300 flex-1 flex flex-col justify-center min-h-[250px] ${
           isDragActive 
-            ? 'border-blue-500 bg-blue-500/10 scale-[0.98]' 
-            : 'border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/50'
+            ? 'border-white bg-white/5 scale-[0.98]' 
+            : 'border-white/10 hover:border-white/20 hover:bg-white/5'
         }`}
       >
         <input {...getInputProps()} />
@@ -97,24 +97,24 @@ export default function ImageUploader({ onComplete }: { onComplete?: () => void 
           <div className="relative">
             {uploading ? (
               <div className="w-16 h-16 flex items-center justify-center">
-                <Loader2 className="w-10 h-10 text-blue-500 animate-spin" strokeWidth={1.5} />
+                <Loader2 className="w-10 h-10 text-white animate-spin" strokeWidth={1.5} />
               </div>
             ) : (
               <motion.div 
                 initial={{ scale: 0.8 }}
                 animate={{ scale: 1 }}
-                className="w-16 h-16 bg-blue-600/20 text-blue-400 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-900/10"
+                className="w-16 h-16 bg-white/5 text-white rounded-2xl flex items-center justify-center shadow-lg border border-white/10"
               >
-                <UploadCloud size={32} strokeWidth={1.5} />
+                <UploadCloud size={32} strokeWidth={1} />
               </motion.div>
             )}
           </div>
           
           <div className="space-y-1.5">
-            <p className="text-lg font-bold text-white">
+            <p className="text-lg font-bold text-white tracking-tight">
               {uploading ? 'Protegendo Arquivos...' : 'Adicionar Fotos'}
             </p>
-            <p className="text-zinc-400 text-sm max-w-[220px] mx-auto leading-relaxed">
+            <p className="text-zinc-500 text-sm max-w-[220px] mx-auto leading-relaxed font-medium">
               {uploading 
                 ? 'Criptografando suas fotos localmente antes do envio.' 
                 : 'Arraste fotos aqui ou toque para selecionar do dispositivo.'}
@@ -123,7 +123,7 @@ export default function ImageUploader({ onComplete }: { onComplete?: () => void 
           
           {!uploading && (
             <div className="pt-2">
-              <span className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-full transition-colors inline-block">
+              <span className="px-5 py-2.5 bg-white hover:bg-zinc-200 text-black text-sm font-semibold rounded-full transition-colors inline-block">
                 Selecionar Arquivos
               </span>
             </div>
@@ -131,11 +131,11 @@ export default function ImageUploader({ onComplete }: { onComplete?: () => void 
         </div>
       </div>
       
-      <div className="bg-blue-500/5 border border-blue-500/10 rounded-2xl p-4 flex items-start gap-4">
-        <div className="w-8 h-8 bg-blue-500/20 text-blue-400 rounded-lg flex items-center justify-center shrink-0">
+      <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-4 flex items-start gap-4">
+        <div className="w-8 h-8 bg-white/5 text-zinc-400 rounded-lg flex items-center justify-center shrink-0 border border-white/5">
           <ImageIcon size={18} />
         </div>
-        <p className="text-[11px] text-blue-400/80 leading-tight font-medium">
+        <p className="text-[11px] text-zinc-400 leading-tight font-medium">
           Privacidade Total: Suas fotos são criptografadas no seu dispositivo. Ninguém, nem mesmo nós, pode vê-las.
         </p>
       </div>

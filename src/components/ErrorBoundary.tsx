@@ -42,18 +42,18 @@ export default class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
-          <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 rounded-3xl p-8 text-center shadow-2xl">
-            <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+        <div className="min-h-screen bg-black flex items-center justify-center p-6">
+          <div className="max-w-md w-full bg-zinc-900/50 border border-white/10 rounded-3xl p-8 text-center shadow-2xl">
+            <div className="w-16 h-16 bg-white/10 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 border border-white/5">
               <AlertCircle size={32} />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-4">Ops! Algo deu errado</h2>
+            <h2 className="text-2xl font-bold text-white mb-4 tracking-tight">Ops! Algo deu errado</h2>
             <p className="text-zinc-400 mb-8 leading-relaxed">
               {errorMessage}
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-white font-semibold rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+              className="w-full py-4 bg-white text-black hover:bg-zinc-200 font-semibold rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
             >
               <RefreshCw size={20} />
               Recarregar Aplicativo

@@ -41,14 +41,14 @@ export default function ConfirmModal({
             initial={{ opacity: 0, scale: 0.9, y: 40 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 40 }}
-            className="relative w-full max-w-[320px] bg-zinc-900 border-2 border-zinc-800 rounded-[2.5rem] p-8 shadow-2xl"
+            className="relative w-full max-w-[320px] bg-black border border-white/10 rounded-[2.5rem] p-8 shadow-2xl"
           >
             <div className="flex flex-col items-center text-center space-y-6">
               <motion.div 
                 initial={{ rotate: -10, scale: 0.8 }}
                 animate={{ rotate: 0, scale: 1 }}
                 className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center ${
-                  isDestructive ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'
+                  isDestructive ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-white/10 text-white border border-white/5'
                 } shadow-lg`}
               >
                 <AlertTriangle size={32} strokeWidth={1.5} />
@@ -69,15 +69,15 @@ export default function ConfirmModal({
                   }}
                   className={`w-full py-4 rounded-[1.25rem] font-bold transition-all active:scale-[0.96] text-lg ${
                     isDestructive 
-                      ? 'bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-900/20' 
-                      : 'bg-blue-600 hover:bg-blue-500 text-white shadow-xl shadow-blue-900/20'
+                      ? 'bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20' 
+                      : 'bg-white text-black hover:bg-zinc-200'
                   }`}
                 >
                   {confirmText}
                 </button>
                 <button
                   onClick={onClose}
-                  className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold rounded-[1.25rem] transition-all active:scale-[0.96] text-lg"
+                  className="w-full py-4 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold rounded-[1.25rem] transition-all active:scale-[0.96] text-lg border border-white/5"
                 >
                   {cancelText}
                 </button>

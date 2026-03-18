@@ -169,7 +169,7 @@ export default function Gallery() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+    <div className="min-h-screen bg-black text-zinc-100">
       <ConfirmModal
         isOpen={!!imageToDelete}
         onClose={() => setImageToDelete(null)}
@@ -180,20 +180,20 @@ export default function Gallery() {
         cancelText="Cancelar"
       />
       
-      <header className="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-xl border-b border-zinc-900 px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-black/70 backdrop-blur-2xl border-b border-white/5 px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
         <div className="flex items-center">
           <button 
             onClick={() => setIsSettingsOpen(true)}
-            className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 -ml-2 sm:-ml-3 rounded-xl hover:bg-zinc-900 transition-colors text-zinc-300 hover:text-white group"
+            className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 -ml-2 sm:-ml-3 rounded-xl hover:bg-white/5 transition-colors text-zinc-400 hover:text-white group"
           >
             <motion.div 
               initial={{ scale: 0.8 }}
               animate={{ scale: 1 }}
-              className="w-8 h-8 sm:w-10 sm:h-10 bg-zinc-800 group-hover:bg-zinc-700 rounded-xl flex items-center justify-center shadow-lg transition-colors"
+              className="w-8 h-8 sm:w-10 sm:h-10 bg-white/5 group-hover:bg-white/10 rounded-xl flex items-center justify-center shadow-lg transition-colors border border-white/5"
             >
               <Settings size={18} className="sm:w-5 sm:h-5" strokeWidth={2} />
             </motion.div>
-            <span className="text-base sm:text-lg font-bold tracking-tight">Configurações</span>
+            <span className="text-base sm:text-lg font-semibold tracking-tight">Configurações</span>
           </button>
         </div>
         
@@ -206,21 +206,21 @@ export default function Gallery() {
                 showToast('Para instalar: use o menu do navegador "Adicionar à Tela de Início" ou o ícone na barra de endereços.', 'info');
               }
             }}
-            className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-full transition-colors text-sm font-medium mr-2"
+            className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-white/10 text-white hover:bg-white/20 rounded-full transition-colors text-sm font-medium mr-2"
           >
             <DownloadCloud size={16} />
             Instalar App
           </button>
           <button
             onClick={lockVault}
-            className="p-2 sm:p-3 text-zinc-400 hover:bg-zinc-900 hover:text-white rounded-full transition-all active:scale-90"
+            className="p-2 sm:p-3 text-zinc-400 hover:bg-white/10 hover:text-white rounded-full transition-all active:scale-90"
             title="Bloquear"
           >
             <Lock size={20} className="sm:w-[22px] sm:h-[22px]" />
           </button>
           <button
             onClick={logOut}
-            className="p-2 sm:p-3 text-zinc-400 hover:bg-zinc-900 hover:text-red-400 rounded-full transition-all active:scale-90"
+            className="p-2 sm:p-3 text-zinc-400 hover:bg-white/10 hover:text-red-400 rounded-full transition-all active:scale-90"
             title="Sair"
           >
             <LogOut size={20} className="sm:w-[22px] sm:h-[22px]" />
@@ -231,13 +231,13 @@ export default function Gallery() {
       <main className="max-w-7xl mx-auto p-2 sm:p-4 pb-24 sm:pb-32">
         {loading ? (
           <div className="flex justify-center py-32">
-            <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+            <Loader2 className="w-10 h-10 text-white animate-spin" />
           </div>
         ) : images.length === 0 ? (
           <div className="text-center py-32 sm:py-48 text-zinc-500 space-y-6 px-4">
             <div className="flex justify-center">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 bg-zinc-900 rounded-[2rem] sm:rounded-[2.5rem] flex items-center justify-center shadow-inner">
-                <LinkIcon size={32} className="sm:w-10 sm:h-10 opacity-10" />
+              <div className="w-20 h-20 sm:w-24 sm:h-24 bg-white/5 rounded-[2rem] sm:rounded-[2.5rem] flex items-center justify-center border border-white/5">
+                <LinkIcon size={32} className="sm:w-10 sm:h-10 opacity-20" />
               </div>
             </div>
             <div className="space-y-2">
@@ -246,7 +246,7 @@ export default function Gallery() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 min-[375px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-1.5 sm:gap-3">
+          <div className="grid grid-cols-2 min-[375px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-1 sm:gap-2">
             {images.map((img) => (
               <motion.div
                 key={img.id}
@@ -254,7 +254,7 @@ export default function Gallery() {
                 animate={{ opacity: 1, scale: 1 }}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="aspect-square bg-zinc-900 cursor-pointer group relative overflow-hidden rounded-xl shadow-md"
+                className="aspect-[4/5] sm:aspect-square bg-black cursor-pointer group relative overflow-hidden rounded-2xl shadow-sm border border-white/5"
                 onClick={() => {
                   if (img.failed) return;
                   setSelectedImage(img.url);
@@ -302,12 +302,12 @@ export default function Gallery() {
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.9 }}
         onClick={() => setIsUploaderOpen(true)}
-        className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 w-14 h-14 sm:w-16 sm:h-16 bg-blue-600 text-white rounded-[1.25rem] sm:rounded-[1.5rem] shadow-2xl shadow-blue-900/40 flex items-center justify-center z-40"
+        className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 w-14 h-14 sm:w-16 sm:h-16 bg-white text-black rounded-full shadow-[0_8px_30px_rgba(255,255,255,0.2)] flex items-center justify-center z-40"
       >
         <div className="relative w-6 h-6 sm:w-8 sm:h-8">
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-6 sm:w-8 h-1 bg-white rounded-full" />
-            <div className="w-1 h-6 sm:h-8 bg-white rounded-full" />
+            <div className="w-6 sm:w-8 h-0.5 sm:h-1 bg-black rounded-full" />
+            <div className="w-0.5 sm:w-1 h-6 sm:h-8 bg-black rounded-full" />
           </div>
         </div>
       </motion.button>
@@ -331,13 +331,13 @@ export default function Gallery() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="relative w-full max-w-lg bg-zinc-900 rounded-t-[2rem] md:rounded-[2rem] shadow-2xl overflow-hidden border-t md:border border-zinc-800 flex flex-col h-[85dvh] md:h-auto md:max-h-[90vh]"
+              className="relative w-full max-w-lg bg-black rounded-t-[2rem] md:rounded-[2rem] shadow-2xl overflow-hidden border-t md:border border-white/10 flex flex-col h-[85dvh] md:h-auto md:max-h-[90vh]"
             >
-              <div className="p-4 sm:p-6 border-b border-zinc-800 flex items-center justify-between shrink-0">
-                <h2 className="text-lg font-semibold text-zinc-100">Adicionar Fotos</h2>
+              <div className="p-4 sm:p-6 border-b border-white/10 flex items-center justify-between shrink-0">
+                <h2 className="text-lg font-semibold text-white">Adicionar Fotos</h2>
                 <button 
                   onClick={() => setIsUploaderOpen(false)}
-                  className="p-2 hover:bg-zinc-800 rounded-full transition-colors text-zinc-400"
+                  className="p-2 hover:bg-white/5 rounded-full transition-colors text-zinc-400"
                 >
                   <X size={20} />
                 </button>

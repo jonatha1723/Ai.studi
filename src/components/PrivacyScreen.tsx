@@ -16,22 +16,22 @@ export default function PrivacyScreen() {
     overlay.style.left = '0';
     overlay.style.width = '100vw';
     overlay.style.height = '100vh';
-    overlay.style.backgroundColor = '#09090b'; // zinc-950
+    overlay.style.backgroundColor = '#000000'; // black
     overlay.style.zIndex = '999999';
     overlay.style.display = 'none';
     overlay.style.flexDirection = 'column';
     overlay.style.alignItems = 'center';
     overlay.style.justifyContent = 'center';
-    overlay.style.color = '#f4f4f5'; // zinc-100
+    overlay.style.color = '#ffffff'; // white
     
     overlay.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 24px;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 24px;">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
         <path d="M12 8v4"/>
         <path d="M12 16h.01"/>
       </svg>
-      <h2 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 8px; font-family: system-ui, -apple-system, sans-serif;">Modo Privacidade</h2>
-      <p style="color: #a1a1aa; text-align: center; max-width: 320px; font-family: system-ui, -apple-system, sans-serif; padding: 0 24px;">
+      <h2 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 8px; font-family: 'Inter', system-ui, -apple-system, sans-serif;">Modo Privacidade</h2>
+      <p style="color: #a1a1aa; text-align: center; max-width: 320px; font-family: 'Inter', system-ui, -apple-system, sans-serif; padding: 0 24px;">
         O conteúdo do cofre foi ocultado para sua segurança.
       </p>
     `;

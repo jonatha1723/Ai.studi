@@ -34,7 +34,7 @@ export default function VaultSetup() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4 sm:p-8 text-zinc-100">
+    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 sm:p-8 text-zinc-100">
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -45,22 +45,22 @@ export default function VaultSetup() {
             <motion.div 
               initial={{ scale: 0.5, rotate: -10 }}
               animate={{ scale: 1, rotate: 0 }}
-              className="w-20 h-20 bg-blue-600/20 text-blue-400 rounded-[2rem] flex items-center justify-center shadow-xl shadow-blue-900/10"
+              className="w-20 h-20 bg-white/5 text-white rounded-[2rem] flex items-center justify-center border border-white/10 shadow-2xl"
             >
-              <ShieldCheck size={40} strokeWidth={1.5} />
+              <ShieldCheck size={40} strokeWidth={1} />
             </motion.div>
           </div>
           <div className="space-y-2">
-            <h2 className="text-3xl font-bold tracking-tight text-white">Configurar Cofre</h2>
-            <p className="text-zinc-400 text-sm px-4 leading-relaxed">
+            <h2 className="text-3xl font-bold tracking-tighter text-white">Configurar Cofre</h2>
+            <p className="text-zinc-500 text-sm px-4 leading-relaxed font-medium">
               Crie sua senha mestre para criptografar suas fotos.
             </p>
           </div>
         </div>
 
-        <div className="p-5 bg-red-400/5 border-2 border-red-400/10 rounded-3xl flex items-start gap-4">
-          <AlertCircle className="text-red-500 shrink-0 mt-0.5" size={20} />
-          <p className="text-[11px] text-red-400/80 leading-tight uppercase font-bold tracking-wider">
+        <div className="p-5 bg-zinc-900/50 border border-white/10 rounded-2xl flex items-start gap-4">
+          <AlertCircle className="text-zinc-400 shrink-0 mt-0.5" size={20} />
+          <p className="text-[11px] text-zinc-400 leading-tight uppercase font-bold tracking-wider">
             Se você esquecer esta senha, seus arquivos serão perdidos para sempre.
           </p>
         </div>
@@ -73,7 +73,7 @@ export default function VaultSetup() {
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 disabled={loading}
-                className="w-full bg-zinc-900 border-2 border-zinc-800 rounded-3xl py-4 text-center text-xl tracking-[0.2em] font-mono focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-zinc-700 placeholder:tracking-normal text-white"
+                className="w-full bg-zinc-900/50 border border-white/10 rounded-2xl py-4 text-center text-xl tracking-[0.2em] font-mono focus:outline-none focus:border-white/30 focus:bg-zinc-900 transition-all placeholder:text-zinc-700 placeholder:tracking-normal text-white"
                 placeholder="Nova Senha"
                 required
               />
@@ -92,7 +92,7 @@ export default function VaultSetup() {
                 value={confirmPin}
                 onChange={(e) => setConfirmPin(e.target.value)}
                 disabled={loading}
-                className="w-full bg-zinc-900 border-2 border-zinc-800 rounded-3xl py-4 text-center text-xl tracking-[0.2em] font-mono focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-zinc-700 placeholder:tracking-normal text-white"
+                className="w-full bg-zinc-900/50 border border-white/10 rounded-2xl py-4 text-center text-xl tracking-[0.2em] font-mono focus:outline-none focus:border-white/30 focus:bg-zinc-900 transition-all placeholder:text-zinc-700 placeholder:tracking-normal text-white"
                 placeholder="Confirmar Senha"
                 required
               />
@@ -120,10 +120,10 @@ export default function VaultSetup() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 text-white font-bold py-5 rounded-[1.5rem] hover:bg-blue-500 transition-all active:scale-[0.97] disabled:opacity-50 flex items-center justify-center shadow-lg shadow-blue-900/20 text-lg"
+              className="w-full bg-white text-black font-semibold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98] text-base"
             >
               {loading ? (
-                <Loader2 className="animate-spin" size={24} />
+                <Loader2 className="animate-spin" size={20} />
               ) : (
                 'Criar Cofre'
               )}

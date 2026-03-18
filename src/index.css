@@ -1,16 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
 
 @layer base {
   html, body {
     overscroll-behavior-y: none; /* Prevent pull-to-refresh */
     -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
+    font-family: var(--font-sans);
+    background-color: #000;
+    color: #fff;
   }
 
   input:-webkit-autofill,
   input:-webkit-autofill:hover, 
   input:-webkit-autofill:focus, 
   input:-webkit-autofill:active {
-    -webkit-box-shadow: 0 0 0 1000px #18181b inset !important;
+    -webkit-box-shadow: 0 0 0 1000px #000 inset !important;
     -webkit-text-fill-color: white !important;
     transition: background-color 5000s ease-in-out 0s;
   }

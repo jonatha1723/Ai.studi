@@ -27,7 +27,7 @@ export default function VaultUnlock() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4 sm:p-8 text-zinc-100">
+    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 sm:p-8 text-zinc-100">
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -38,14 +38,14 @@ export default function VaultUnlock() {
             <motion.div 
               initial={{ scale: 0.5, rotate: -10 }}
               animate={{ scale: 1, rotate: 0 }}
-              className="w-20 h-20 bg-blue-600/20 text-blue-400 rounded-[2rem] flex items-center justify-center shadow-xl shadow-blue-900/10"
+              className="w-20 h-20 bg-white/5 text-white rounded-[2rem] flex items-center justify-center border border-white/10 shadow-2xl"
             >
-              <LockKeyhole size={40} strokeWidth={1.5} />
+              <LockKeyhole size={40} strokeWidth={1} />
             </motion.div>
           </div>
           <div className="space-y-2">
-            <h2 className="text-3xl font-bold tracking-tight text-white">Cofre Protegido</h2>
-            <p className="text-zinc-400 text-sm px-4 leading-relaxed">
+            <h2 className="text-3xl font-bold tracking-tighter text-white">Cofre Protegido</h2>
+            <p className="text-zinc-500 text-sm px-4 leading-relaxed font-medium">
               Sua galeria está criptografada. Digite sua senha para acessar.
             </p>
           </div>
@@ -60,7 +60,7 @@ export default function VaultUnlock() {
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 disabled={loading}
-                className="w-full bg-zinc-900 border-2 border-zinc-800 rounded-3xl py-4 text-center text-xl tracking-[0.2em] font-mono focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-zinc-700 placeholder:tracking-normal text-white"
+                className="w-full bg-zinc-900/50 border border-white/10 rounded-2xl py-4 text-center text-xl tracking-[0.2em] font-mono focus:outline-none focus:border-white/30 focus:bg-zinc-800/50 transition-all placeholder:text-zinc-700 placeholder:tracking-normal text-white"
                 placeholder="••••••"
                 required
               />
@@ -88,10 +88,10 @@ export default function VaultUnlock() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 text-white font-bold py-5 rounded-[1.5rem] hover:bg-blue-500 transition-all active:scale-[0.97] disabled:opacity-50 flex items-center justify-center shadow-lg shadow-blue-900/20 text-lg"
+              className="w-full bg-white text-black font-semibold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98] text-base"
             >
               {loading ? (
-                <Loader2 className="animate-spin" size={24} />
+                <Loader2 className="animate-spin" size={20} />
               ) : (
                 'Desbloquear'
               )}
@@ -100,7 +100,7 @@ export default function VaultUnlock() {
             <button
               type="button"
               onClick={logOut}
-              className="w-full text-zinc-400 hover:text-white text-sm font-semibold transition-colors py-3 rounded-2xl hover:bg-zinc-900"
+              className="w-full text-zinc-400 hover:text-white text-sm font-semibold transition-colors py-3 rounded-2xl hover:bg-zinc-900/50"
             >
               Sair da conta
             </button>

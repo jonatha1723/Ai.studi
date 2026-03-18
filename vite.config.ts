@@ -7,6 +7,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
+    base: './',
     plugins: [
       react(), 
       tailwindcss(),
@@ -18,8 +19,8 @@ export default defineConfig(({mode}) => {
           name: 'Galeria Segura',
           short_name: 'Galeria',
           description: 'Armazenamento em nuvem com criptografia de ponta a ponta.',
-          theme_color: '#09090b',
-          background_color: '#09090b',
+          theme_color: '#000000',
+          background_color: '#000000',
           display: 'standalone',
           orientation: 'portrait',
           start_url: '/',
