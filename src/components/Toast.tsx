@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle, AlertCircle, X } from 'lucide-react';
+import { CheckCircle, AlertCircle, Info, X } from 'lucide-react';
 
-export type ToastType = 'success' | 'error';
+export type ToastType = 'success' | 'error' | 'info';
 
 interface ToastProps {
   key?: string;
@@ -25,10 +25,12 @@ export default function Toast({ message, type, onClose }: ToastProps) {
       className={`fixed top-4 sm:top-8 sm:bottom-auto left-1/2 -translate-x-1/2 z-[200] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl backdrop-blur-xl border w-[calc(100%-2rem)] sm:w-auto max-w-md ${
         type === 'success' 
           ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-          : 'bg-red-500/10 border-red-500/20 text-red-400'
+          : type === 'error'
+          ? 'bg-red-500/10 border-red-500/20 text-red-400'
+          : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
       }`}
     >
-      {type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+      {type === 'success' ? <CheckCircle size={20} /> : type === 'error' ? <AlertCircle size={20} /> : <Info size={20} />}
       <span className="text-sm font-medium">{message}</span>
       <button 
         onClick={onClose}
