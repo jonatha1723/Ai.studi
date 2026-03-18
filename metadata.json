@@ -1,0 +1,5 @@
+{
+  "name": "Secure Cloud Gallery",
+  "description": "A highly secure, end-to-end encrypted cloud gallery where only you can view your images.",
+  "requestFramePermissions": []
+}

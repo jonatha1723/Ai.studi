@@ -1,0 +1,89 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+    
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+    
+    function validStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+    
+    function isTimestamp(field) {
+      return request.resource.data[field] is timestamp;
+    }
+    
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUser() {
+      return hasOnlyAllowedFields(['salt', 'createdAt', 'verification']) &&
+             hasRequiredFields(['salt', 'createdAt']) &&
+             validStringLength('salt', 10, 100) &&
+             isTimestamp('createdAt') &&
+             (!('verification' in request.resource.data) || (
+               request.resource.data.verification is map &&
+               request.resource.data.verification.keys().hasAll(['ciphertext', 'iv']) &&
+               request.resource.data.verification.ciphertext is string &&
+               request.resource.data.verification.iv is string
+             ));
+    }
+    
+    function isValidImage() {
+      return hasOnlyAllowedFields(['userId', 'ciphertext', 'iv', 'createdAt']) &&
+             hasRequiredFields(['userId', 'ciphertext', 'iv', 'createdAt']) &&
+             request.resource.data.userId == request.auth.uid &&
+             request.resource.data.ciphertext is string &&
+             request.resource.data.ciphertext.size() > 0 &&
+             request.resource.data.ciphertext.size() < 1048576 && // Max 1MB (Firestore document limit)
+             validStringLength('iv', 10, 50) &&
+             isTimestamp('createdAt');
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser();
+      allow update: if isOwner(userId) && isValidUser() && areImmutableFieldsUnchanged(['createdAt', 'salt']);
+      allow delete: if isOwner(userId);
+    }
+    
+    match /images/{imageId} {
+      allow get: if isDocOwner();
+      allow list: if isDocOwner();
+      allow create: if isAuthenticated() && isValidImage();
+      allow update: if isDocOwner() && isValidImage() && areImmutableFieldsUnchanged(['userId', 'createdAt']);
+      allow delete: if isDocOwner();
+    }
+  }
+}
