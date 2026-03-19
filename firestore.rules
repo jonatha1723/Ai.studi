@@ -51,8 +51,13 @@ service cloud.firestore {
              (!('verification' in request.resource.data) || (
                request.resource.data.verification is map &&
                request.resource.data.verification.keys().hasAll(['ciphertext', 'iv']) &&
+               request.resource.data.verification.keys().hasOnly(['ciphertext', 'iv']) &&
                request.resource.data.verification.ciphertext is string &&
-               request.resource.data.verification.iv is string
+               request.resource.data.verification.ciphertext.size() > 0 &&
+               request.resource.data.verification.ciphertext.size() < 1000 &&
+               request.resource.data.verification.iv is string &&
+               request.resource.data.verification.iv.size() > 0 &&
+               request.resource.data.verification.iv.size() < 100
              ));
     }
     
