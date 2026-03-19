@@ -9,7 +9,8 @@ import ImageUploader from './ImageUploader';
 import ConfirmModal from './ConfirmModal';
 import SettingsModal from './SettingsModal';
 import Toast, { ToastType } from './Toast';
-import { Lock, LogOut, Trash2, X, Download, Link as LinkIcon, Maximize2, Minimize2, Loader2, Settings, DownloadCloud, Shield, Plus } from 'lucide-react';
+import SupportModal from './SupportModal';
+import { Lock, LogOut, Trash2, X, Download, Link as LinkIcon, Maximize2, Minimize2, Loader2, Settings, DownloadCloud, Shield, Plus, MessageSquare } from 'lucide-react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -36,6 +37,7 @@ export default function Gallery() {
   const [imageToDelete, setImageToDelete] = useState<string | null>(null);
   const [isUploaderOpen, setIsUploaderOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -190,7 +192,7 @@ export default function Gallery() {
       />
       
       <header className="sticky top-0 z-40 bg-[#050505]/80 backdrop-blur-2xl border-b border-white/5 px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
-        <div className="flex items-center">
+        <div className="flex items-center gap-2">
           <button 
             onClick={() => setIsSettingsOpen(true)}
             className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 -ml-2 sm:-ml-3 rounded-xl hover:bg-white/5 transition-colors text-zinc-400 hover:text-white group"
@@ -202,7 +204,21 @@ export default function Gallery() {
             >
               <Settings size={18} className="sm:w-5 sm:h-5" strokeWidth={2} />
             </motion.div>
-            <span className="text-base sm:text-lg font-semibold tracking-tight">Configurações</span>
+            <span className="hidden sm:block text-base sm:text-lg font-semibold tracking-tight">Configurações</span>
+          </button>
+          
+          <button 
+            onClick={() => setIsSupportOpen(true)}
+            className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 rounded-xl hover:bg-white/5 transition-colors text-zinc-400 hover:text-white group"
+          >
+            <motion.div 
+              initial={{ scale: 0.8 }}
+              animate={{ scale: 1 }}
+              className="w-8 h-8 sm:w-10 sm:h-10 bg-white/5 group-hover:bg-white/10 rounded-xl flex items-center justify-center shadow-lg transition-colors border border-white/5"
+            >
+              <MessageSquare size={18} className="sm:w-5 sm:h-5" strokeWidth={2} />
+            </motion.div>
+            <span className="hidden sm:block text-base sm:text-lg font-semibold tracking-tight">Suporte</span>
           </button>
         </div>
         
@@ -508,6 +524,13 @@ export default function Gallery() {
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)} 
       />
+      
+      {isSupportOpen && (
+        <SupportModal 
+          isOpen={isSupportOpen} 
+          onClose={() => setIsSupportOpen(false)} 
+        />
+      )}
     </div>
   );
 }
