@@ -1,8 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-// @ts-ignore
-import localConfig from 'firebase-config';
+import localConfig from '../firebase-applet-config.json';
 
 // 1. Tenta carregar as variáveis de ambiente (Usado na Vercel)
 const envConfig = {
