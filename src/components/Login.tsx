@@ -127,7 +127,18 @@ export default function Login() {
                 disabled={loading}
                 className="w-full bg-white text-black hover:bg-zinc-200 disabled:bg-zinc-200/50 font-semibold py-4 rounded-2xl transition-all flex items-center justify-center gap-3 active:scale-[0.98] text-base"
               >
-                {loading ? <Loader2 className="animate-spin" size={20} /> : (
+                {loading ? (
+                  <div className="flex gap-1.5 items-center justify-center">
+                    {[0, 1, 2].map((i) => (
+                      <motion.div
+                        key={i}
+                        animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }}
+                        transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
+                        className="w-1.5 h-1.5 bg-black rounded-full"
+                      />
+                    ))}
+                  </div>
+                ) : (
                   <>
                     <svg className="w-5 h-5" viewBox="0 0 24 24">
                       <path
@@ -221,7 +232,18 @@ export default function Login() {
                   disabled={loading}
                   className="w-full bg-white text-black font-semibold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98] text-base"
                 >
-                  {loading ? <Loader2 className="animate-spin" size={20} /> : (
+                  {loading ? (
+                    <div className="flex gap-1.5 items-center justify-center">
+                      {[0, 1, 2].map((i) => (
+                        <motion.div
+                          key={i}
+                          animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }}
+                          transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
+                          className="w-1.5 h-1.5 bg-black rounded-full"
+                        />
+                      ))}
+                    </div>
+                  ) : (
                     <>
                       {isSignUp ? 'Criar Conta' : 'Entrar'}
                       <ArrowRight size={20} />

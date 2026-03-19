@@ -11,17 +11,13 @@ import VaultUnlock from './components/VaultUnlock';
 import Gallery from './components/Gallery';
 import ErrorBoundary from './components/ErrorBoundary';
 import PrivacyScreen from './components/PrivacyScreen';
-import { Loader2, Download } from 'lucide-react';
+import LoadingScreen from './components/LoadingScreen';
 
 function AppContent() {
   const { user, isAuthReady, needsSetup, cryptoKey } = useAuth();
 
   if (!isAuthReady) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-white animate-spin" />
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   return (
