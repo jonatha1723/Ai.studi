@@ -32,9 +32,11 @@ export default function Login() {
         setError('Este e-mail já está em uso.');
       } else if (err.code === 'auth/weak-password') {
         setError('A senha deve ter pelo menos 6 caracteres.');
+      } else if (err.code === 'auth/operation-not-allowed') {
+        setError('O login por e-mail e senha não está ativado no Firebase. Por favor, ative-o no Console do Firebase (Authentication > Sign-in method).');
       } else {
         console.error('Erro de autenticação:', err);
-        setError('Ops! Algo deu errado\nOcorreu um erro inesperado no login');
+        setError(`Ops! Algo deu errado\n${err.message || 'Ocorreu um erro inesperado no login'}`);
       }
     } finally {
       setLoading(false);
@@ -65,8 +67,11 @@ export default function Login() {
     } catch (err: any) {
       if (err.code === 'auth/popup-closed-by-user') {
         setError('O login foi cancelado.');
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setError('Este domínio não está autorizado no Firebase. Adicione-o na lista de domínios autorizados (Authentication > Settings > Authorized domains).');
       } else {
-        setError('Ops! Algo deu errado\nOcorreu um erro inesperado no login');
+        console.error('Erro no Google Sign-In:', err);
+        setError(`Ops! Algo deu errado\n${err.message || 'Ocorreu um erro inesperado no login'}`);
       }
     } finally {
       setLoading(false);
