@@ -101,20 +101,11 @@ export default function ImageUploader({ onComplete }: { onComplete?: () => void 
             {uploading ? (
               <div className="w-20 h-20 flex items-center justify-center relative">
                 <motion.div 
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-0 border-2 border-white/5 border-t-white/40 rounded-full" 
+                  animate={{ opacity: [0.3, 0.6, 0.3] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                  className="absolute inset-0 blur-xl bg-white/20 rounded-full" 
                 />
-                <div className="flex gap-1">
-                  {[0, 1, 2].map((i) => (
-                    <motion.div
-                      key={i}
-                      animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }}
-                      transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-                      className="w-1 h-1 bg-white rounded-full"
-                    />
-                  ))}
-                </div>
+                <Loader2 className="w-10 h-10 text-white animate-spin relative z-10" strokeWidth={2} />
               </div>
             ) : (
               <motion.div 

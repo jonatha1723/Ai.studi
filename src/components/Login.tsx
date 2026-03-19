@@ -128,15 +128,13 @@ export default function Login() {
                 className="w-full bg-white text-black hover:bg-zinc-200 disabled:bg-zinc-200/50 font-semibold py-4 rounded-2xl transition-all flex items-center justify-center gap-3 active:scale-[0.98] text-base"
               >
                 {loading ? (
-                  <div className="flex gap-1.5 items-center justify-center">
-                    {[0, 1, 2].map((i) => (
-                      <motion.div
-                        key={i}
-                        animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }}
-                        transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-                        className="w-1.5 h-1.5 bg-black rounded-full"
-                      />
-                    ))}
+                  <div className="relative">
+                    <motion.div
+                      animate={{ opacity: [0.3, 0.6, 0.3] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                      className="absolute inset-0 blur-md bg-black/20 rounded-full"
+                    />
+                    <Loader2 className="animate-spin relative z-10" size={20} />
                   </div>
                 ) : (
                   <>
@@ -233,15 +231,13 @@ export default function Login() {
                   className="w-full bg-white text-black font-semibold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98] text-base"
                 >
                   {loading ? (
-                    <div className="flex gap-1.5 items-center justify-center">
-                      {[0, 1, 2].map((i) => (
-                        <motion.div
-                          key={i}
-                          animate={{ scale: [1, 1.5, 1], opacity: [0.3, 1, 0.3] }}
-                          transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-                          className="w-1.5 h-1.5 bg-black rounded-full"
-                        />
-                      ))}
+                    <div className="relative">
+                      <motion.div
+                        animate={{ opacity: [0.3, 0.6, 0.3] }}
+                        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                        className="absolute inset-0 blur-md bg-black/20 rounded-full"
+                      />
+                      <Loader2 className="animate-spin relative z-10" size={20} />
                     </div>
                   ) : (
                     <>
