@@ -9,7 +9,7 @@ import ImageUploader from './ImageUploader';
 import ConfirmModal from './ConfirmModal';
 import SettingsModal from './SettingsModal';
 import Toast, { ToastType } from './Toast';
-import { Lock, LogOut, Trash2, X, Download, Link as LinkIcon, Maximize2, Minimize2, Loader2, Settings, DownloadCloud } from 'lucide-react';
+import { Lock, LogOut, Trash2, X, Download, Link as LinkIcon, Maximize2, Minimize2, Loader2, Settings, DownloadCloud, Shield, Plus } from 'lucide-react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -178,7 +178,7 @@ export default function Gallery() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-zinc-100">
+    <div className="min-h-screen bg-[#050505] text-zinc-100 selection:bg-white/20">
       <ConfirmModal
         isOpen={!!imageToDelete}
         onClose={() => setImageToDelete(null)}
@@ -189,7 +189,7 @@ export default function Gallery() {
         cancelText="Cancelar"
       />
       
-      <header className="sticky top-0 z-40 bg-black/70 backdrop-blur-2xl border-b border-white/5 px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-[#050505]/80 backdrop-blur-2xl border-b border-white/5 px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
         <div className="flex items-center">
           <button 
             onClick={() => setIsSettingsOpen(true)}
@@ -239,23 +239,32 @@ export default function Gallery() {
 
       <main className="max-w-7xl mx-auto p-2 sm:p-4 pb-24 sm:pb-32">
         {loading ? (
-          <div className="flex justify-center py-32">
-            <Loader2 className="w-10 h-10 text-white animate-spin" />
+          <div className="grid grid-cols-2 min-[375px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2 sm:gap-4">
+            {[...Array(16)].map((_, i) => (
+              <div key={i} className="aspect-[4/5] sm:aspect-square bg-white/5 rounded-2xl animate-pulse border border-white/5" />
+            ))}
           </div>
         ) : images.length === 0 ? (
-          <div className="text-center py-32 sm:py-48 text-zinc-500 space-y-6 px-4">
-            <div className="flex justify-center">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 bg-white/5 rounded-[2rem] sm:rounded-[2.5rem] flex items-center justify-center border border-white/5">
-                <LinkIcon size={32} className="sm:w-10 sm:h-10 opacity-20" />
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center py-32 sm:py-48 text-zinc-500 space-y-6 px-4 flex flex-col items-center"
+          >
+            <div className="relative">
+              <div className="absolute inset-0 bg-white/10 blur-3xl rounded-full" />
+              <div className="relative w-24 h-24 bg-gradient-to-b from-white/10 to-white/5 rounded-[2rem] flex items-center justify-center border border-white/10 shadow-2xl">
+                <Shield size={40} className="text-white/50" strokeWidth={1.5} />
               </div>
             </div>
             <div className="space-y-2">
-              <p className="text-base sm:text-lg font-semibold text-zinc-400">Seu cofre está vazio</p>
-              <p className="text-xs sm:text-sm text-zinc-600">Toque no botão abaixo para adicionar fotos.</p>
+              <h3 className="text-xl font-medium text-zinc-200 tracking-tight">Cofre Vazio</h3>
+              <p className="text-sm text-zinc-500 max-w-xs mx-auto leading-relaxed">
+                Suas fotos criptografadas aparecerão aqui. Ninguém mais tem acesso a elas.
+              </p>
             </div>
-          </div>
+          </motion.div>
         ) : (
-          <div className="grid grid-cols-2 min-[375px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-1 sm:gap-2">
+          <div className="grid grid-cols-2 min-[375px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2 sm:gap-4">
             {images.map((img) => (
               <motion.div
                 key={img.id}
@@ -263,7 +272,7 @@ export default function Gallery() {
                 animate={{ opacity: 1, scale: 1 }}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="aspect-[4/5] sm:aspect-square bg-black cursor-pointer group relative overflow-hidden rounded-2xl shadow-sm border border-white/5"
+                className="aspect-[4/5] sm:aspect-square bg-zinc-900 cursor-pointer group relative overflow-hidden rounded-2xl shadow-lg ring-1 ring-white/10 transition-all hover:ring-white/30"
                 onClick={() => {
                   if (img.failed) return;
                   setSelectedImage(img.url);
@@ -295,9 +304,9 @@ export default function Gallery() {
                       e.stopPropagation();
                       setImageToDelete(img.id);
                     }}
-                    className="p-2 bg-black/40 hover:bg-red-500 text-white rounded-xl backdrop-blur-md transition-all active:scale-90"
+                    className="p-2 sm:p-2.5 bg-black/40 hover:bg-red-500/90 text-white rounded-xl backdrop-blur-md transition-all active:scale-90 border border-white/10 hover:border-red-500"
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={16} className="sm:w-4 sm:h-4" />
                   </button>
                 </div>
               </motion.div>
@@ -309,16 +318,12 @@ export default function Gallery() {
       {/* Floating Action Button */}
       <motion.button
         whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.9 }}
+        whileTap={{ scale: 0.95 }}
         onClick={() => setIsUploaderOpen(true)}
-        className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 w-14 h-14 sm:w-16 sm:h-16 bg-white text-black rounded-full shadow-[0_8px_30px_rgba(255,255,255,0.2)] flex items-center justify-center z-40"
+        className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 h-14 sm:h-16 px-4 sm:px-6 bg-white text-black rounded-full shadow-[0_0_40px_rgba(255,255,255,0.3)] flex items-center justify-center z-40 gap-2 sm:gap-3 font-medium transition-all border border-white/20"
       >
-        <div className="relative w-6 h-6 sm:w-8 sm:h-8">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-6 sm:w-8 h-0.5 sm:h-1 bg-black rounded-full" />
-            <div className="w-0.5 sm:w-1 h-6 sm:h-8 bg-black rounded-full" />
-          </div>
-        </div>
+        <Plus size={24} className="sm:w-6 sm:h-6" strokeWidth={2.5} />
+        <span className="hidden sm:block text-base font-bold tracking-tight pr-2">Adicionar Fotos</span>
       </motion.button>
 
       {/* Uploader Modal */}
@@ -340,7 +345,7 @@ export default function Gallery() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="relative w-full max-w-lg bg-black rounded-t-[2rem] md:rounded-[2rem] shadow-2xl overflow-hidden border-t md:border border-white/10 flex flex-col h-[85dvh] md:h-auto md:max-h-[90vh]"
+              className="relative w-full max-w-lg bg-[#0a0a0a] rounded-t-[2.5rem] md:rounded-[2.5rem] shadow-2xl overflow-hidden border-t md:border border-white/10 flex flex-col h-[85dvh] md:h-auto md:max-h-[90vh] ring-1 ring-white/5"
             >
               <div className="p-4 sm:p-6 border-b border-white/10 flex items-center justify-between shrink-0">
                 <h2 className="text-lg font-semibold text-white">Adicionar Fotos</h2>
