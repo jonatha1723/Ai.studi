@@ -9,7 +9,7 @@ import ImageUploader from './ImageUploader';
 import ConfirmModal from './ConfirmModal';
 import SettingsModal from './SettingsModal';
 import Toast, { ToastType } from './Toast';
-import { Lock, LogOut, Trash2, X, Download, Link as LinkIcon, Maximize2, Loader2, Settings, DownloadCloud } from 'lucide-react';
+import { Lock, LogOut, Trash2, X, Download, Link as LinkIcon, Maximize2, Minimize2, Loader2, Settings, DownloadCloud } from 'lucide-react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -38,11 +38,20 @@ export default function Gallery() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [showControls, setShowControls] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const decryptedCache = useRef<Map<string, string>>(new Map());
 
   const showToast = (message: string, type: ToastType = 'success') => {
     setToast({ message, type });
   };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   useEffect(() => {
     // Clear cache when cryptoKey changes to avoid using wrong key for old data
@@ -358,7 +367,14 @@ export default function Gallery() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-black flex items-center justify-center p-0"
-            onClick={() => {
+            onClick={async () => {
+              if (document.fullscreenElement && document.exitFullscreen) {
+                try {
+                  await document.exitFullscreen();
+                } catch (err) {
+                  console.error(err);
+                }
+              }
               setSelectedImage(null);
               setSelectedImageId(null);
               const url = new URL(window.location.href);
@@ -374,6 +390,26 @@ export default function Gallery() {
                   exit={{ opacity: 0, y: -20 }}
                   className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-2 sm:gap-4 z-10"
                 >
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        if (!document.fullscreenElement) {
+                          await document.documentElement.requestFullscreen();
+                        } else {
+                          if (document.exitFullscreen) {
+                            await document.exitFullscreen();
+                          }
+                        }
+                      } catch (err) {
+                        console.error("Erro ao tentar tela cheia:", err);
+                      }
+                    }}
+                    className="text-white/70 hover:text-white transition-colors p-2 sm:p-3 bg-black/40 backdrop-blur-md rounded-full hover:bg-black/60 active:scale-90"
+                    title={isFullscreen ? "Sair da Tela Cheia" : "Tela Cheia"}
+                  >
+                    {isFullscreen ? <Minimize2 size={20} className="sm:w-6 sm:h-6" /> : <Maximize2 size={20} className="sm:w-6 sm:h-6" />}
+                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -398,8 +434,15 @@ export default function Gallery() {
                   </a>
                   <button 
                     className="text-white/70 hover:text-white transition-colors p-2 sm:p-3 bg-black/40 backdrop-blur-md rounded-full hover:bg-black/60 active:scale-90"
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
+                      if (document.fullscreenElement && document.exitFullscreen) {
+                        try {
+                          await document.exitFullscreen();
+                        } catch (err) {
+                          console.error(err);
+                        }
+                      }
                       setSelectedImage(null);
                       setSelectedImageId(null);
                       // Remove query param
