@@ -10,9 +10,16 @@ import { db } from '../firebase';
 import Toast, { ToastType } from './Toast';
 import { motion, AnimatePresence } from 'motion/react';
 
-export default function ImageUploader({ onComplete }: { onComplete?: () => void }) {
+export default function ImageUploader({ 
+  onComplete, 
+  onUploadingStateChange 
+}: { 
+  onComplete?: () => void,
+  onUploadingStateChange?: (isUploading: boolean) => void
+}) {
   const { user, cryptoKey } = useAuth();
   const [uploading, setUploading] = useState(false);
+  const isUploadingRef = React.useRef(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
 
   const showToast = (message: string, type: ToastType = 'success') => {
@@ -20,12 +27,19 @@ export default function ImageUploader({ onComplete }: { onComplete?: () => void 
   };
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    if (!user || !cryptoKey || acceptedFiles.length === 0) return;
+    if (!user || !cryptoKey || acceptedFiles.length === 0 || isUploadingRef.current) return;
     
+    isUploadingRef.current = true;
     setUploading(true);
+    if (onUploadingStateChange) onUploadingStateChange(true);
     
     try {
-      for (const file of acceptedFiles) {
+      // Deduplicate files by name and size to prevent accidental double-selection
+      const uniqueFiles = Array.from(
+        new Map(acceptedFiles.map(f => [f.name + '_' + f.size, f])).values()
+      );
+
+      for (const file of uniqueFiles) {
         // 1. Compress image to ensure it fits in Firestore (max 1MB, let's aim for < 700KB)
         const options = {
           maxSizeMB: 0.6,
@@ -70,7 +84,9 @@ export default function ImageUploader({ onComplete }: { onComplete?: () => void 
       console.error('Error uploading image:', error);
       showToast('Falha ao enviar a imagem de forma segura.', 'error');
     } finally {
+      isUploadingRef.current = false;
       setUploading(false);
+      if (onUploadingStateChange) onUploadingStateChange(false);
     }
   }, [user, cryptoKey, onComplete]);
 
@@ -78,7 +94,8 @@ export default function ImageUploader({ onComplete }: { onComplete?: () => void 
     onDrop,
     accept: {
       'image/*': []
-    }
+    },
+    disabled: uploading
   } as any);
 
   return (

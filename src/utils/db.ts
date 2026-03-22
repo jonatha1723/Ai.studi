@@ -70,3 +70,8 @@ export async function clearImageCache() {
   const db = await getDB();
   await db.clear('images');
 }
+
+export async function getAllImagesFromCache() {
+  const db = await getDB();
+  return db.getAll('images');
+}

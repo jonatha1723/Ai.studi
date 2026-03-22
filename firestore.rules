@@ -4,6 +4,29 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId} (matches request.auth.uid)
+    // Fields:
+    //   - salt: string (required, 10-100 chars) - Base64 salt for key derivation
+    //   - createdAt: timestamp (required, immutable) - Creation time
+    //   - verification: map (optional) - Password verification data
+    //     - ciphertext: string (required, < 1000 chars)
+    //     - iv: string (required, < 100 chars)
+    //
+    // Collection: images
+    // Document ID: {imageId} (auto-generated)
+    // Fields:
+    //   - userId: string (required, immutable, matches request.auth.uid) - Owner ID
+    //   - ciphertext: string (required, < 1MB) - Encrypted image data
+    //   - iv: string (required, 10-50 chars) - Initialization vector
+    //   - createdAt: timestamp (required, immutable) - Upload time
+    //
+    // ===============================================================
+
+    // ===============================================================
     // Helper Functions
     // ===============================================================
     function isAuthenticated() {
@@ -16,6 +39,12 @@ service cloud.firestore {
     
     function isDocOwner() {
       return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "jogonesteterp@gmail.com" && request.auth.token.email_verified == true));
     }
     
     function hasRequiredFields(fields) {
@@ -34,6 +63,10 @@ service cloud.firestore {
     
     function isTimestamp(field) {
       return request.resource.data[field] is timestamp;
+    }
+
+    function isRecent(field) {
+      return request.resource.data[field] == request.time;
     }
     
     function areImmutableFieldsUnchanged(fields) {
@@ -67,7 +100,7 @@ service cloud.firestore {
              request.resource.data.userId == request.auth.uid &&
              request.resource.data.ciphertext is string &&
              request.resource.data.ciphertext.size() > 0 &&
-             request.resource.data.ciphertext.size() < 1048576 && // Max 1MB (Firestore document limit)
+             request.resource.data.ciphertext.size() < 1048576 && // Max 1MB
              validStringLength('iv', 10, 50) &&
              isTimestamp('createdAt');
     }
@@ -77,18 +110,18 @@ service cloud.firestore {
     // ===============================================================
     
     match /users/{userId} {
-      allow read: if isOwner(userId);
-      allow create: if isOwner(userId) && isValidUser();
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser() && isRecent('createdAt');
       allow update: if isOwner(userId) && isValidUser() && areImmutableFieldsUnchanged(['createdAt', 'salt']);
-      allow delete: if isOwner(userId);
+      allow delete: if isAdmin(); // Only admin can delete users for safety
     }
     
     match /images/{imageId} {
-      allow get: if isDocOwner();
-      allow list: if isDocOwner();
-      allow create: if isAuthenticated() && isValidImage();
+      allow get: if resource == null || isDocOwner() || isAdmin();
+      allow list: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && isValidImage() && isRecent('createdAt');
       allow update: if isDocOwner() && isValidImage() && areImmutableFieldsUnchanged(['userId', 'createdAt']);
-      allow delete: if isDocOwner();
+      allow delete: if resource == null || isDocOwner() || isAdmin();
     }
   }
 }

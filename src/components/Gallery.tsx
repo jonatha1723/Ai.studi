@@ -3,13 +3,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { collection, query, where, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { decryptData } from '../utils/crypto';
-import { saveImageToCache, getImageFromCache, removeImageFromCache } from '../utils/db';
+import { saveImageToCache, getImageFromCache, removeImageFromCache, getAllImagesFromCache } from '../utils/db';
 import { useInstallPrompt } from '../utils/useInstallPrompt';
 import ImageUploader from './ImageUploader';
 import ConfirmModal from './ConfirmModal';
 import SettingsModal from './SettingsModal';
 import Toast, { ToastType } from './Toast';
-import { Lock, LogOut, Trash2, X, Download, Link as LinkIcon, Maximize2, Minimize2, Loader2, Settings, DownloadCloud, Shield, Plus } from 'lucide-react';
+import { Lock, LogOut, Trash2, X, Download, Link as LinkIcon, Maximize2, Minimize2, Loader2, Settings, DownloadCloud, Shield, Plus, ChevronLeft, ChevronRight, Check, CheckSquare, Wand2 } from 'lucide-react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -24,6 +24,7 @@ interface DecryptedImage {
   id: string;
   url: string;
   failed?: boolean;
+  createdAt: number;
 }
 
 export default function Gallery() {
@@ -35,10 +36,18 @@ export default function Gallery() {
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [imageToDelete, setImageToDelete] = useState<string | null>(null);
   const [isUploaderOpen, setIsUploaderOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
+  const [isDeletingMultiple, setIsDeletingMultiple] = useState(false);
+  const [isCleaningDuplicates, setIsCleaningDuplicates] = useState(false);
+  const [duplicatesToDelete, setDuplicatesToDelete] = useState<string[]>([]);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isZoomed, setIsZoomed] = useState(false);
+  const touchStartX = useRef<number | null>(null);
   const decryptedCache = useRef<Map<string, string>>(new Map());
 
   const showToast = (message: string, type: ToastType = 'success') => {
@@ -71,79 +80,171 @@ export default function Gallery() {
   useEffect(() => {
     if (!isAuthReady || !user || !cryptoKey) return;
     
-    setLoading(true);
-    const q = query(
-      collection(db, 'images'),
-      where('userId', '==', user.uid),
-      orderBy('createdAt', 'desc')
-    );
+    let unsubscribe: (() => void) | null = null;
+    let isMounted = true;
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const fetchedImages = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as any[];
-
-      const newDecryptedImages: DecryptedImage[] = [];
+    const loadImages = async () => {
+      setLoading(true);
       
-      for (const img of fetchedImages) {
-        // 1. Check memory cache (fastest)
-        if (decryptedCache.current.has(img.id)) {
-          newDecryptedImages.push({
-            id: img.id,
-            url: decryptedCache.current.get(img.id)!
-          });
-          continue;
-        }
+      try {
+        // 1. Load all images from local IndexedDB cache first (0 Firestore reads!)
+        const cachedImages = await getAllImagesFromCache();
+        
+        const getTimestamp = (ca: any) => ca instanceof Date ? ca.getTime() : (ca?.toMillis ? ca.toMillis() : (ca?.seconds ? ca.seconds * 1000 : Date.now()));
 
-        try {
-          let ciphertext = img.ciphertext;
-          let iv = img.iv;
+        // Sort cached images by createdAt descending
+        cachedImages.sort((a, b) => {
+          const timeA = getTimestamp(a.createdAt);
+          const timeB = getTimestamp(b.createdAt);
+          return timeB - timeA;
+        });
 
-          // 2. Check local database cache (IndexedDB)
-          const cached = await getImageFromCache(img.id);
-          
-          if (cached && cached.ciphertext) {
-            ciphertext = cached.ciphertext;
-            iv = cached.iv;
-          } else if (ciphertext) {
-            // 3. If not in cache but in Firestore, save to cache for next time
-            await saveImageToCache({
-              id: img.id,
-              ciphertext,
-              iv,
-              createdAt: img.createdAt
-            });
-          }
-
-          if (ciphertext && iv) {
-            const decryptedBase64 = await decryptData(ciphertext, iv, cryptoKey);
-            decryptedCache.current.set(img.id, decryptedBase64);
+        const newDecryptedImages: DecryptedImage[] = [];
+        
+        for (const img of cachedImages) {
+          const createdAt = getTimestamp(img.createdAt);
+          if (decryptedCache.current.has(img.id)) {
             newDecryptedImages.push({
               id: img.id,
-              url: decryptedBase64
+              url: decryptedCache.current.get(img.id)!,
+              createdAt
             });
-          } else {
-            throw new Error('No data found');
+            continue;
           }
-        } catch (e) {
-          console.error('Failed to decrypt image', img.id, e);
-          newDecryptedImages.push({
-            id: img.id,
-            url: '',
-            failed: true
-          });
-        }
-      }
-      
-      setImages(newDecryptedImages);
-      setLoading(false);
-     }, (error) => {
-      console.error('Erro ao buscar imagens:', error);
-      setLoading(false);
-    });
 
-    return () => unsubscribe();
+          try {
+            if (img.ciphertext && img.iv) {
+              const decryptedBase64 = await decryptData(img.ciphertext, img.iv, cryptoKey);
+              decryptedCache.current.set(img.id, decryptedBase64);
+              newDecryptedImages.push({
+                id: img.id,
+                url: decryptedBase64,
+                createdAt
+              });
+            }
+          } catch (e) {
+            console.error('Failed to decrypt cached image', img.id, e);
+            newDecryptedImages.push({
+              id: img.id,
+              url: '',
+              failed: true,
+              createdAt
+            });
+          }
+        }
+        
+        if (isMounted) {
+          setImages(newDecryptedImages);
+          setLoading(false);
+        }
+
+        // 2. Listen ONLY for new images in Firestore to save reads
+        let latestDate = null;
+        if (cachedImages.length > 0) {
+          latestDate = cachedImages[0].createdAt;
+        }
+
+        let q;
+        if (latestDate) {
+          q = query(
+            collection(db, 'images'),
+            where('userId', '==', user.uid),
+            where('createdAt', '>', latestDate),
+            orderBy('createdAt', 'desc')
+          );
+        } else {
+          q = query(
+            collection(db, 'images'),
+            where('userId', '==', user.uid),
+            orderBy('createdAt', 'desc')
+          );
+        }
+
+        const unsub = onSnapshot(q, async (snapshot) => {
+          if (snapshot.empty) return; // No new images, no extra processing
+
+          const fetchedImages = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as any[];
+
+          const newFetchedDecrypted: DecryptedImage[] = [];
+          
+          for (const img of fetchedImages) {
+            const createdAt = getTimestamp(img.createdAt);
+            if (decryptedCache.current.has(img.id)) {
+              newFetchedDecrypted.push({
+                id: img.id,
+                url: decryptedCache.current.get(img.id)!,
+                createdAt
+              });
+              continue;
+            }
+
+            try {
+              let ciphertext = img.ciphertext;
+              let iv = img.iv;
+
+              // Save new image to local cache
+              await saveImageToCache({
+                id: img.id,
+                ciphertext,
+                iv,
+                createdAt: img.createdAt
+              });
+
+              if (ciphertext && iv) {
+                const decryptedBase64 = await decryptData(ciphertext, iv, cryptoKey);
+                decryptedCache.current.set(img.id, decryptedBase64);
+                newFetchedDecrypted.push({
+                  id: img.id,
+                  url: decryptedBase64,
+                  createdAt
+                });
+              }
+            } catch (e) {
+              console.error('Failed to decrypt new image', img.id, e);
+              newFetchedDecrypted.push({
+                id: img.id,
+                url: '',
+                failed: true,
+                createdAt
+              });
+            }
+          }
+          
+          if (isMounted && newFetchedDecrypted.length > 0) {
+            setImages(prev => {
+              const combined = [...newFetchedDecrypted, ...prev];
+              // Remove duplicates
+              const unique = Array.from(new Map(combined.map(item => [item.id, item])).values());
+              // Sort again just to be sure
+              unique.sort((a, b) => b.createdAt - a.createdAt);
+              return unique;
+            });
+          }
+        }, (error) => {
+          console.error('Erro ao buscar novas imagens:', error);
+        });
+
+        if (!isMounted) {
+          unsub();
+        } else {
+          unsubscribe = unsub;
+        }
+
+      } catch (err) {
+        console.error("Error loading images from cache:", err);
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    loadImages();
+
+    return () => {
+      isMounted = false;
+      if (unsubscribe) unsubscribe();
+    };
   }, [user, cryptoKey, isAuthReady]);
 
   useEffect(() => {
@@ -159,21 +260,136 @@ export default function Gallery() {
     }
   }, [images, selectedImage]);
 
-  const handleDelete = async () => {
-    if (!imageToDelete) return;
-    try {
-      await deleteDoc(doc(db, 'images', imageToDelete));
-      await removeImageFromCache(imageToDelete);
-      setImages(prev => prev.filter(img => img.id !== imageToDelete));
-      if (selectedImageId === imageToDelete) {
+  const handleNextImage = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!selectedImageId) return;
+    const currentIndex = images.findIndex(img => img.id === selectedImageId);
+    if (currentIndex < images.length - 1) {
+      const nextImg = images[currentIndex + 1];
+      setSelectedImage(nextImg.url);
+      setSelectedImageId(nextImg.id);
+      const url = new URL(window.location.href);
+      url.searchParams.set('image', nextImg.id);
+      window.history.replaceState({}, '', url);
+    }
+  };
+
+  const handlePrevImage = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!selectedImageId) return;
+    const currentIndex = images.findIndex(img => img.id === selectedImageId);
+    if (currentIndex > 0) {
+      const prevImg = images[currentIndex - 1];
+      setSelectedImage(prevImg.url);
+      setSelectedImageId(prevImg.id);
+      const url = new URL(window.location.href);
+      url.searchParams.set('image', prevImg.id);
+      window.history.replaceState({}, '', url);
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!selectedImage) return;
+      if (e.key === 'ArrowRight') {
+        handleNextImage();
+      } else if (e.key === 'ArrowLeft') {
+        handlePrevImage();
+      } else if (e.key === 'Escape') {
+        if (document.fullscreenElement && document.exitFullscreen) {
+          document.exitFullscreen().catch(console.error);
+        }
         setSelectedImage(null);
         setSelectedImageId(null);
+        const url = new URL(window.location.href);
+        url.searchParams.delete('image');
+        window.history.replaceState({}, '', url);
       }
-      setImageToDelete(null);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedImage, selectedImageId, images]);
+
+  const handleDelete = async () => {
+    if (!imageToDelete) return;
+    const id = imageToDelete;
+    
+    // Optimistic UI update
+    setImages(prev => prev.filter(img => img.id !== id));
+    if (selectedImageId === id) {
+      setSelectedImage(null);
+      setSelectedImageId(null);
+    }
+    setImageToDelete(null);
+
+    try {
+      await removeImageFromCache(id);
+      try {
+        await deleteDoc(doc(db, 'images', id));
+      } catch (e) {
+        console.warn('Firestore delete failed, might already be deleted:', e);
+      }
       showToast('Imagem excluída com sucesso!');
     } catch (error) {
       console.error('Erro ao excluir imagem:', error);
       showToast('Erro ao excluir imagem.', 'error');
+    }
+  };
+
+  const handleDeleteMultiple = async () => {
+    setIsDeletingMultiple(false);
+    setLoading(true);
+    const ids = [...selectedForDeletion];
+    
+    // Optimistic UI update
+    setImages(prev => prev.filter(img => !ids.includes(img.id)));
+    setSelectedForDeletion([]);
+    setIsSelectionMode(false);
+
+    try {
+      for (const id of ids) {
+        await removeImageFromCache(id);
+        try {
+          await deleteDoc(doc(db, 'images', id));
+        } catch (e) {
+          console.warn(`Firestore delete failed for ${id}:`, e);
+        }
+      }
+      showToast(`${ids.length} imagens excluídas com sucesso!`);
+    } catch (error) {
+      console.error('Erro ao excluir imagens:', error);
+      showToast('Erro ao excluir imagens.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCleanDuplicates = async () => {
+    setIsCleaningDuplicates(false);
+    setLoading(true);
+    const ids = [...duplicatesToDelete];
+    
+    // Optimistic UI update
+    setImages(prev => prev.filter(img => !ids.includes(img.id)));
+    setDuplicatesToDelete([]);
+    setIsSelectionMode(false);
+
+    try {
+      for (const id of ids) {
+        await removeImageFromCache(id);
+        try {
+          await deleteDoc(doc(db, 'images', id));
+        } catch (e) {
+          console.warn(`Firestore delete failed for ${id}:`, e);
+        }
+      }
+      showToast(`${ids.length} duplicatas removidas com sucesso!`);
+    } catch (error) {
+      console.error('Erro ao limpar duplicatas:', error);
+      showToast('Erro ao limpar duplicatas.', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -186,6 +402,24 @@ export default function Gallery() {
         title="Excluir Imagem"
         message="Tem certeza que deseja excluir esta imagem permanentemente?"
         confirmText="Excluir"
+        cancelText="Cancelar"
+      />
+      <ConfirmModal
+        isOpen={isDeletingMultiple}
+        onClose={() => setIsDeletingMultiple(false)}
+        onConfirm={handleDeleteMultiple}
+        title="Excluir Imagens"
+        message={`Tem certeza que deseja excluir ${selectedForDeletion.length} imagens permanentemente?`}
+        confirmText="Excluir"
+        cancelText="Cancelar"
+      />
+      <ConfirmModal
+        isOpen={isCleaningDuplicates}
+        onClose={() => setIsCleaningDuplicates(false)}
+        onConfirm={handleCleanDuplicates}
+        title="Limpar Duplicatas"
+        message={`Encontramos ${duplicatesToDelete.length} imagens duplicadas. Deseja excluí-las permanentemente para liberar espaço?`}
+        confirmText="Limpar"
         cancelText="Cancelar"
       />
       
@@ -207,6 +441,16 @@ export default function Gallery() {
         </div>
         
         <div className="flex items-center gap-1 sm:gap-2">
+          <button
+            onClick={() => {
+              setIsSelectionMode(!isSelectionMode);
+              setSelectedForDeletion([]);
+            }}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors text-sm font-medium mr-1 sm:mr-2 ${isSelectionMode ? 'bg-white text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
+          >
+            <CheckSquare size={16} />
+            <span className="hidden sm:inline">{isSelectionMode ? 'Concluir' : 'Selecionar'}</span>
+          </button>
           <button
             onClick={() => {
               if (isInstallable) {
@@ -272,8 +516,14 @@ export default function Gallery() {
                 animate={{ opacity: 1, scale: 1 }}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="aspect-[4/5] sm:aspect-square bg-zinc-900 cursor-pointer group relative overflow-hidden rounded-2xl shadow-lg ring-1 ring-white/10 transition-all hover:ring-white/30"
+                className={`aspect-[4/5] sm:aspect-square bg-zinc-900 cursor-pointer group relative overflow-hidden rounded-2xl shadow-lg ring-1 transition-all ${isSelectionMode && selectedForDeletion.includes(img.id) ? 'ring-blue-500 ring-2 scale-[0.98]' : 'ring-white/10 hover:ring-white/30'}`}
                 onClick={() => {
+                  if (isSelectionMode) {
+                    setSelectedForDeletion(prev => 
+                      prev.includes(img.id) ? prev.filter(id => id !== img.id) : [...prev, img.id]
+                    );
+                    return;
+                  }
                   if (img.failed) return;
                   setSelectedImage(img.url);
                   setSelectedImageId(img.id);
@@ -298,17 +548,28 @@ export default function Gallery() {
                     draggable={false}
                   />
                 )}
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setImageToDelete(img.id);
-                    }}
-                    className="p-2 sm:p-2.5 bg-black/40 hover:bg-red-500/90 text-white rounded-xl backdrop-blur-md transition-all active:scale-90 border border-white/10 hover:border-red-500"
-                  >
-                    <Trash2 size={16} className="sm:w-4 sm:h-4" />
-                  </button>
-                </div>
+                
+                {isSelectionMode && (
+                  <div className="absolute inset-0 bg-black/10 z-10 flex items-start justify-start p-2 sm:p-3 transition-colors">
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${selectedForDeletion.includes(img.id) ? 'bg-blue-500 border-blue-500' : 'border-white/70 bg-black/40'}`}>
+                      {selectedForDeletion.includes(img.id) && <Check size={14} className="text-white" />}
+                    </div>
+                  </div>
+                )}
+
+                {!isSelectionMode && (
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setImageToDelete(img.id);
+                      }}
+                      className="p-2 sm:p-2.5 bg-black/40 hover:bg-red-500/90 text-white rounded-xl backdrop-blur-md transition-all active:scale-90 border border-white/10 hover:border-red-500"
+                    >
+                      <Trash2 size={16} className="sm:w-4 sm:h-4" />
+                    </button>
+                  </div>
+                )}
               </motion.div>
             ))}
           </div>
@@ -316,15 +577,87 @@ export default function Gallery() {
       </main>
 
       {/* Floating Action Button */}
-      <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={() => setIsUploaderOpen(true)}
-        className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 h-14 sm:h-16 px-4 sm:px-6 bg-white text-black rounded-full shadow-[0_0_40px_rgba(255,255,255,0.3)] flex items-center justify-center z-40 gap-2 sm:gap-3 font-medium transition-all border border-white/20"
-      >
-        <Plus size={24} className="sm:w-6 sm:h-6" strokeWidth={2.5} />
-        <span className="hidden sm:block text-base font-bold tracking-tight pr-2">Adicionar Fotos</span>
-      </motion.button>
+      <AnimatePresence>
+        {!isSelectionMode && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setIsUploaderOpen(true)}
+            className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 h-14 sm:h-16 px-4 sm:px-6 bg-white text-black rounded-full shadow-[0_0_40px_rgba(255,255,255,0.3)] flex items-center justify-center z-40 gap-2 sm:gap-3 font-medium transition-all border border-white/20"
+          >
+            <Plus size={24} className="sm:w-6 sm:h-6" strokeWidth={2.5} />
+            <span className="hidden sm:block text-base font-bold tracking-tight pr-2">Adicionar Fotos</span>
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* Selection Mode Bottom Bar */}
+      <AnimatePresence>
+        {isSelectionMode && (
+          <motion.div
+            initial={{ y: 100 }}
+            animate={{ y: 0 }}
+            exit={{ y: 100 }}
+            className="fixed bottom-0 left-0 right-0 bg-[#0a0a0a]/90 backdrop-blur-xl border-t border-white/10 p-4 sm:p-6 flex flex-col sm:flex-row items-center justify-between z-40 gap-4"
+          >
+            <div className="flex items-center justify-between w-full sm:w-auto gap-4">
+              <span className="text-white font-medium text-lg">{selectedForDeletion.length} selecionadas</span>
+              <button
+                onClick={() => {
+                  if (selectedForDeletion.length === images.length) {
+                    setSelectedForDeletion([]);
+                  } else {
+                    setSelectedForDeletion(images.map(img => img.id));
+                  }
+                }}
+                className="text-sm text-zinc-400 hover:text-white transition-colors"
+              >
+                {selectedForDeletion.length === images.length ? 'Desmarcar tudo' : 'Selecionar tudo'}
+              </button>
+            </div>
+            <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
+              <button 
+                onClick={() => {
+                  const urlMap = new Map<string, string[]>();
+                  images.forEach(img => {
+                    if (!img.failed && img.url) {
+                      const existing = urlMap.get(img.url) || [];
+                      urlMap.set(img.url, [...existing, img.id]);
+                    }
+                  });
+                  const idsToDelete: string[] = [];
+                  urlMap.forEach(ids => {
+                    if (ids.length > 1) {
+                      idsToDelete.push(...ids.slice(1));
+                    }
+                  });
+                  if (idsToDelete.length === 0) {
+                    showToast('Nenhuma imagem duplicada encontrada.', 'info');
+                  } else {
+                    setDuplicatesToDelete(idsToDelete);
+                    setIsCleaningDuplicates(true);
+                  }
+                }}
+                className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 sm:py-2.5 text-zinc-900 bg-emerald-400 hover:bg-emerald-500 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors"
+              >
+                <Wand2 size={18} />
+                <span className="text-sm sm:text-base">Limpar Duplicatas</span>
+              </button>
+              <button 
+                onClick={() => setIsDeletingMultiple(true)} 
+                disabled={selectedForDeletion.length === 0}
+                className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 sm:py-2.5 text-white bg-red-500 hover:bg-red-600 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+              >
+                <Trash2 size={18} />
+                <span className="text-sm sm:text-base">Excluir</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Uploader Modal */}
       <AnimatePresence>
@@ -337,7 +670,7 @@ export default function Gallery() {
             className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-6"
           >
             <div
-              onClick={() => setIsUploaderOpen(false)}
+              onClick={() => !isUploading && setIsUploaderOpen(false)}
               className="absolute inset-0 bg-black/80 backdrop-blur-sm"
             />
             <motion.div
@@ -350,14 +683,18 @@ export default function Gallery() {
               <div className="p-4 sm:p-6 border-b border-white/10 flex items-center justify-between shrink-0">
                 <h2 className="text-lg font-semibold text-white">Adicionar Fotos</h2>
                 <button 
-                  onClick={() => setIsUploaderOpen(false)}
-                  className="p-2 hover:bg-white/5 rounded-full transition-colors text-zinc-400"
+                  onClick={() => !isUploading && setIsUploaderOpen(false)}
+                  disabled={isUploading}
+                  className={`p-2 rounded-full transition-colors ${isUploading ? 'text-zinc-600 cursor-not-allowed' : 'hover:bg-white/5 text-zinc-400'}`}
                 >
                   <X size={20} />
                 </button>
               </div>
               <div className="p-4 sm:p-6 overflow-y-auto flex-1 flex flex-col">
-                <ImageUploader onComplete={() => setIsUploaderOpen(false)} />
+                <ImageUploader 
+                  onComplete={() => setIsUploaderOpen(false)} 
+                  onUploadingStateChange={setIsUploading}
+                />
               </div>
             </motion.div>
           </motion.div>
@@ -462,25 +799,44 @@ export default function Gallery() {
               )}
             </AnimatePresence>
             <div 
-              className="w-full h-full flex items-center justify-center"
+              className="w-full h-full flex items-center justify-center relative"
               onClick={(e) => {
                 e.stopPropagation();
                 setShowControls(prev => !prev);
               }}
+              onTouchStart={(e) => {
+                touchStartX.current = e.touches[0].clientX;
+              }}
+              onTouchEnd={(e) => {
+                if (!touchStartX.current || isZoomed) return;
+                const touchEndX = e.changedTouches[0].clientX;
+                const distance = touchStartX.current - touchEndX;
+                if (distance > 50) {
+                  handleNextImage();
+                } else if (distance < -50) {
+                  handlePrevImage();
+                }
+                touchStartX.current = null;
+              }}
             >
               <TransformWrapper
                 initialScale={1}
-                minScale={0.5}
+                minScale={1}
                 maxScale={5}
                 centerOnInit
                 wheel={{ step: 0.1 }}
                 doubleClick={{ disabled: false, step: 1 }}
+                onZoom={(ref) => setIsZoomed(ref.state.scale > 1)}
+                onZoomStop={(ref) => setIsZoomed(ref.state.scale > 1)}
+                onInit={(ref) => setIsZoomed(ref.state.scale > 1)}
               >
                 <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full flex items-center justify-center">
                   <motion.img
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.9, opacity: 0 }}
+                    key={selectedImageId}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.2 }}
                     src={selectedImage}
                     alt="Full screen"
                     className="w-full h-full select-none cursor-grab active:cursor-grabbing transition-all duration-300 object-contain"
@@ -489,6 +845,37 @@ export default function Gallery() {
                   />
                 </TransformComponent>
               </TransformWrapper>
+              
+              <AnimatePresence>
+                {showControls && (
+                  <>
+                    <motion.button
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePrevImage(e as any);
+                      }}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white transition-colors p-3 bg-black/40 backdrop-blur-md rounded-full hover:bg-black/60 active:scale-90 hidden sm:block"
+                    >
+                      <ChevronLeft size={32} />
+                    </motion.button>
+                    <motion.button
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleNextImage(e as any);
+                      }}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/70 hover:text-white transition-colors p-3 bg-black/40 backdrop-blur-md rounded-full hover:bg-black/60 active:scale-90 hidden sm:block"
+                    >
+                      <ChevronRight size={32} />
+                    </motion.button>
+                  </>
+                )}
+              </AnimatePresence>
             </div>
           </motion.div>
         )}
