@@ -8,7 +8,7 @@ export async function generateSalt(): Promise<string> {
   return btoa(String.fromCharCode(...salt));
 }
 
-export async function deriveKey(password: string, saltBase64: string): Promise<CryptoKey> {
+export async function deriveKey(password: string, saltBase64: string, extractable: boolean = false): Promise<CryptoKey> {
   const enc = new TextEncoder();
   const salt = Uint8Array.from(atob(saltBase64), c => c.charCodeAt(0));
   
@@ -29,7 +29,7 @@ export async function deriveKey(password: string, saltBase64: string): Promise<C
     },
     keyMaterial,
     { name: ALGORITHM, length: 256 },
-    false, // non-extractable
+    extractable, // non-extractable by default
     ['encrypt', 'decrypt']
   );
 }

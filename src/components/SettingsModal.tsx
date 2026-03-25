@@ -1,32 +1,54 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Shield, HardDrive, User, Clock, Trash2, Check, AlertTriangle, EyeOff, DownloadCloud } from 'lucide-react';
+import { X, Shield, HardDrive, User, Clock, Trash2, Check, AlertTriangle, EyeOff, DownloadCloud, Lock, Image as ImageIcon, Key, Download } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { clearImageCache } from '../utils/db';
+import { clearImageCache, saveImageToCache } from '../utils/db';
 import { useInstallPrompt } from '../utils/useInstallPrompt';
 import Toast, { ToastType } from './Toast';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../firebase';
+
+interface DecryptedImage {
+  id: string;
+  url: string;
+  failed?: boolean;
+  createdAt: number;
+}
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  images?: DecryptedImage[];
 }
 
-export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const { user, logOut } = useAuth();
+export default function SettingsModal({ isOpen, onClose, images = [] }: SettingsModalProps) {
+  const { user, logOut, extraPassword, securityImageId, updateExtraPassword, setSecurityImage } = useAuth();
   const { isInstallable, promptToInstall } = useInstallPrompt();
-  const [activeTab, setActiveTab] = useState<'security' | 'storage' | 'account'>('security');
   const [autoLockTimer, setAutoLockTimer] = useState<string>('15');
   const [privacyMode, setPrivacyMode] = useState<boolean>(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [newExtraPassword, setNewExtraPassword] = useState(extraPassword || '');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [isSettingsUnlocked, setIsSettingsUnlocked] = useState(false);
+  const [unlockPasswordInput, setUnlockPasswordInput] = useState('');
+
+  useEffect(() => {
+    setNewExtraPassword(extraPassword || '');
+  }, [extraPassword]);
 
   useEffect(() => {
     const savedTimer = localStorage.getItem('autoLockTimer') || '15';
     setAutoLockTimer(savedTimer);
-    
     const savedPrivacy = localStorage.getItem('privacyMode') === 'true';
     setPrivacyMode(savedPrivacy);
   }, []);
+
+  const handleClose = () => {
+    setIsSettingsUnlocked(false);
+    setUnlockPasswordInput('');
+    onClose();
+  };
 
   const handleSaveTimer = (val: string) => {
     setAutoLockTimer(val);
@@ -57,11 +79,30 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     }
   };
 
+  const handleUpdateExtraPassword = async () => {
+    if (!newExtraPassword.trim()) {
+      showToast('A senha não pode estar vazia', 'error');
+      return;
+    }
+    setIsUpdatingPassword(true);
+    try {
+      await updateExtraPassword(newExtraPassword);
+      showToast('Senha extra atualizada com sucesso');
+    } catch (error) {
+      showToast('Erro ao atualizar senha extra', 'error');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
   const tabs = [
     { id: 'security', label: 'Segurança', icon: Shield },
+    { id: 'fakeVault', label: 'Imagem Protegida', icon: Lock },
     { id: 'storage', label: 'Armazenamento', icon: HardDrive },
     { id: 'account', label: 'Conta', icon: User },
   ] as const;
+
+  const [activeTab, setActiveTab] = useState<typeof tabs[number]['id']>('security');
 
   return (
     <AnimatePresence>
@@ -74,7 +115,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-6"
         >
           <div
-            onClick={onClose}
+            onClick={handleClose}
             className="absolute inset-0 bg-black/80 backdrop-blur-sm"
           />
           <motion.div
@@ -89,7 +130,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <div className="flex items-center justify-between mb-4 md:mb-8">
                 <h2 className="text-xl font-bold text-white tracking-tight">Configurações</h2>
                 <button 
-                  onClick={onClose}
+                  onClick={handleClose}
                   className="md:hidden p-2 hover:bg-white/5 rounded-full transition-colors text-zinc-400"
                 >
                   <X size={20} />
@@ -121,7 +162,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             {/* Content */}
             <div className="flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto relative pb-24 md:pb-8">
               <button 
-                onClick={onClose}
+                onClick={handleClose}
                 className="hidden md:flex absolute top-6 right-6 p-2 hover:bg-white/5 rounded-full transition-colors text-zinc-400"
               >
                 <X size={20} />
@@ -198,6 +239,155 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                         ))}
                       </div>
                     </div>
+                  </motion.div>
+                )}
+
+                {activeTab === 'fakeVault' && (
+                  <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
+                    {extraPassword && !isSettingsUnlocked ? (
+                      <div className="flex flex-col items-center justify-center py-12 space-y-6">
+                        <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center text-white mb-2">
+                          <Lock size={32} />
+                        </div>
+                        <h3 className="text-xl font-semibold text-white text-center">Configurações Protegidas</h3>
+                        <p className="text-sm text-zinc-400 text-center max-w-xs">
+                          Digite sua senha extra atual para alterar a imagem ou a senha.
+                        </p>
+                        <div className="w-full max-w-xs space-y-4">
+                          <div className="relative">
+                            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-zinc-500">
+                              <Key size={18} />
+                            </div>
+                            <input
+                              type="password"
+                              maxLength={15}
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              value={unlockPasswordInput}
+                              onChange={(e) => setUnlockPasswordInput(e.target.value.replace(/\D/g, ''))}
+                              placeholder="Senha atual"
+                              className="w-full bg-zinc-900/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-white/20 transition-all"
+                            />
+                          </div>
+                          <button
+                            onClick={() => {
+                              if (unlockPasswordInput === extraPassword) {
+                                setIsSettingsUnlocked(true);
+                                setUnlockPasswordInput('');
+                              } else {
+                                showToast('Senha incorreta', 'error');
+                              }
+                            }}
+                            disabled={unlockPasswordInput.length === 0}
+                            className="w-full py-3 bg-white text-black font-bold rounded-xl hover:bg-zinc-200 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                          >
+                            Desbloquear
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <h3 className="text-lg font-semibold text-white mb-2">Imagem Protegida</h3>
+                        <div className="p-4 bg-zinc-900/50 border border-white/10 rounded-xl mb-6">
+                          <p className="text-sm text-zinc-300 leading-relaxed">
+                            A <strong>Imagem Protegida</strong> é uma camada extra de segurança para uma foto específica. A imagem selecionada ficará borrada e trancada com um cadeado na sua galeria. Para visualizá-la, será necessário digitar a senha de até 15 dígitos definida abaixo.
+                          </p>
+                        </div>
+
+                        <div className="space-y-4 mb-8">
+                          <label className="block text-sm font-medium text-zinc-400">1. Defina a Senha Extra (até 15 dígitos)</label>
+                          <div className="relative">
+                            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-zinc-500">
+                              <Key size={18} />
+                            </div>
+                            <input
+                              type="password"
+                              maxLength={15}
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              value={newExtraPassword}
+                              onChange={(e) => setNewExtraPassword(e.target.value.replace(/\D/g, ''))}
+                              placeholder="Ex: 123456..."
+                              className="w-full bg-zinc-900/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-white/20 transition-all"
+                            />
+                          </div>
+                          <button
+                            onClick={handleUpdateExtraPassword}
+                            disabled={isUpdatingPassword || newExtraPassword === extraPassword || newExtraPassword.length === 0}
+                            className="w-full py-3 bg-white text-black font-bold rounded-xl hover:bg-zinc-200 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                          >
+                            {isUpdatingPassword ? 'Atualizando...' : 'Salvar Senha Extra'}
+                          </button>
+                        </div>
+
+                        <div className="space-y-4">
+                          <label className="block text-sm font-medium text-zinc-400">2. Selecione a Imagem para Proteger</label>
+                          
+                          {securityImageId && (
+                            <div className="p-4 bg-zinc-900/50 border border-white/10 rounded-xl flex items-center justify-between mb-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center text-white overflow-hidden shrink-0">
+                                  {images.find(img => img.id === securityImageId) ? (
+                                    <img src={images.find(img => img.id === securityImageId)?.url} alt="Protegida" className="w-full h-full object-cover" />
+                                  ) : (
+                                    <Lock size={18} />
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-white">Imagem Protegida Ativa</p>
+                                  <p className="text-xs text-zinc-500">Esta imagem exige a senha extra para ser vista.</p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    await setSecurityImage(null);
+                                    showToast('Proteção removida da imagem');
+                                  } catch (error) {
+                                    showToast('Erro ao remover proteção', 'error');
+                                  }
+                                }}
+                                className="text-xs text-red-400 hover:text-red-300 font-medium shrink-0"
+                              >
+                                Remover
+                              </button>
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-3 gap-2 max-h-60 overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
+                            {images.length > 0 ? (
+                              images.map((img) => (
+                                <div 
+                                  key={img.id}
+                                  onClick={async () => {
+                                    try {
+                                      await setSecurityImage(img.id);
+                                      showToast('Imagem protegida com sucesso!');
+                                    } catch (error) {
+                                      showToast('Erro ao proteger imagem', 'error');
+                                    }
+                                  }}
+                                  className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 transition-all ${securityImageId === img.id ? 'border-white' : 'border-transparent hover:border-white/30'}`}
+                                >
+                                  <img src={img.url} alt="Gallery item" className="w-full h-full object-cover" />
+                                  {securityImageId === img.id && (
+                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                      <Check className="text-white" size={24} />
+                                    </div>
+                                  )}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="col-span-3 p-4 bg-zinc-900/30 border border-dashed border-white/10 rounded-xl text-center">
+                                <p className="text-sm text-zinc-500">
+                                  Nenhuma imagem na galeria. Adicione fotos primeiro.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </motion.div>
                 )}
 

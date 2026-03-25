@@ -28,7 +28,7 @@ interface DecryptedImage {
 }
 
 export default function Gallery() {
-  const { user, cryptoKey, logOut, lockVault, isAuthReady } = useAuth();
+  const { user, cryptoKey, logOut, lockVault, isAuthReady, securityImageId, extraPassword, setSecurityImage } = useAuth();
   const { isInstallable, promptToInstall } = useInstallPrompt();
   const [images, setImages] = useState<DecryptedImage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,12 +47,21 @@ export default function Gallery() {
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
+  const [extraPasswordInput, setExtraPasswordInput] = useState('');
+  const [isPromptingExtra, setIsPromptingExtra] = useState<string | null>(null);
+  const [isExtraUnlocked, setIsExtraUnlocked] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const decryptedCache = useRef<Map<string, string>>(new Map());
 
   const showToast = (message: string, type: ToastType = 'success') => {
     setToast({ message, type });
   };
+
+  useEffect(() => {
+    if (!cryptoKey) {
+      setIsExtraUnlocked(false);
+    }
+  }, [cryptoKey]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -65,6 +74,9 @@ export default function Gallery() {
   useEffect(() => {
     // Clear cache when cryptoKey changes to avoid using wrong key for old data
     decryptedCache.current.clear();
+    if (!cryptoKey) {
+      setIsExtraUnlocked(false);
+    }
   }, [cryptoKey]);
 
   useEffect(() => {
@@ -393,6 +405,49 @@ export default function Gallery() {
     }
   };
 
+  const handleImageClick = (img: DecryptedImage) => {
+    if (isSelectionMode) {
+      setSelectedForDeletion(prev => 
+        prev.includes(img.id) ? prev.filter(id => id !== img.id) : [...prev, img.id]
+      );
+      return;
+    }
+    if (img.failed) return;
+
+    // Check if it's the security image and if it's locked
+    if (img.id === securityImageId && !isExtraUnlocked && extraPassword) {
+      setIsPromptingExtra(img.id);
+      return;
+    }
+
+    setSelectedImage(img.url);
+    setSelectedImageId(img.id);
+    setShowControls(true);
+    const url = new URL(window.location.href);
+    url.searchParams.set('image', img.id);
+    window.history.replaceState({}, '', url);
+  };
+
+  const handleExtraPasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (extraPasswordInput === extraPassword) {
+      setIsExtraUnlocked(true);
+      const img = images.find(i => i.id === isPromptingExtra);
+      if (img) {
+        setSelectedImage(img.url);
+        setSelectedImageId(img.id);
+        setShowControls(true);
+        const url = new URL(window.location.href);
+        url.searchParams.set('image', img.id);
+        window.history.replaceState({}, '', url);
+      }
+      setIsPromptingExtra(null);
+      setExtraPasswordInput('');
+    } else {
+      showToast('Senha extra incorreta', 'error');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#050505] text-zinc-100 selection:bg-white/20">
       <ConfirmModal
@@ -517,26 +572,20 @@ export default function Gallery() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 className={`aspect-[4/5] sm:aspect-square bg-zinc-900 cursor-pointer group relative overflow-hidden rounded-2xl shadow-lg ring-1 transition-all ${isSelectionMode && selectedForDeletion.includes(img.id) ? 'ring-blue-500 ring-2 scale-[0.98]' : 'ring-white/10 hover:ring-white/30'}`}
-                onClick={() => {
-                  if (isSelectionMode) {
-                    setSelectedForDeletion(prev => 
-                      prev.includes(img.id) ? prev.filter(id => id !== img.id) : [...prev, img.id]
-                    );
-                    return;
-                  }
-                  if (img.failed) return;
-                  setSelectedImage(img.url);
-                  setSelectedImageId(img.id);
-                  setShowControls(true);
-                  const url = new URL(window.location.href);
-                  url.searchParams.set('image', img.id);
-                  window.history.replaceState({}, '', url);
-                }}
+                onClick={() => handleImageClick(img)}
               >
                 {img.failed ? (
                   <div className="w-full h-full flex flex-col items-center justify-center text-zinc-700 p-2 text-center">
                     <Lock size={24} className="mb-1 opacity-20" />
                     <span className="text-[10px] font-bold uppercase tracking-tighter">Erro</span>
+                  </div>
+                ) : img.id === securityImageId && !isExtraUnlocked && extraPassword ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 text-zinc-500 group-hover:text-white transition-colors">
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-white/5 blur-xl rounded-full" />
+                      <Lock size={32} className="relative z-10" strokeWidth={1.5} />
+                    </div>
+                    <span className="mt-3 text-[10px] font-bold uppercase tracking-widest opacity-50">Protegida</span>
                   </div>
                 ) : (
                   <img 
@@ -558,7 +607,7 @@ export default function Gallery() {
                 )}
 
                 {!isSelectionMode && (
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-20 flex gap-1">
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
@@ -655,6 +704,61 @@ export default function Gallery() {
                 <span className="text-sm sm:text-base">Excluir</span>
               </button>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Extra Password Prompt */}
+      <AnimatePresence>
+        {isPromptingExtra && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-full max-w-sm bg-zinc-900 rounded-[2rem] p-8 border border-white/10 shadow-2xl text-center space-y-6"
+            >
+              <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center mx-auto border border-white/10">
+                <Lock size={32} className="text-white" strokeWidth={1.5} />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-bold text-white tracking-tight">Imagem Protegida</h2>
+                <p className="text-sm text-zinc-500">Esta imagem requer uma senha extra para ser visualizada.</p>
+              </div>
+              <form onSubmit={handleExtraPasswordSubmit} className="space-y-4">
+                <input
+                  autoFocus
+                  type="password"
+                  value={extraPasswordInput}
+                  onChange={(e) => setExtraPasswordInput(e.target.value)}
+                  placeholder="Digite a Senha Extra"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white text-center placeholder:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-white/20 transition-all"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPromptingExtra(null);
+                      setExtraPasswordInput('');
+                    }}
+                    className="flex-1 py-3 bg-white/5 text-white font-bold rounded-xl hover:bg-white/10 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-3 bg-white text-black font-bold rounded-xl hover:bg-zinc-200 transition-all"
+                  >
+                    Desbloquear
+                  </button>
+                </div>
+              </form>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -894,6 +998,7 @@ export default function Gallery() {
       <SettingsModal 
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)} 
+        images={images}
       />
     </div>
   );

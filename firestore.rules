@@ -77,7 +77,7 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
     function isValidUser() {
-      return hasOnlyAllowedFields(['salt', 'createdAt', 'verification']) &&
+      return hasOnlyAllowedFields(['salt', 'createdAt', 'verification', 'extraPassword', 'securityImageId']) &&
              hasRequiredFields(['salt', 'createdAt']) &&
              validStringLength('salt', 10, 100) &&
              isTimestamp('createdAt') &&
@@ -91,6 +91,14 @@ service cloud.firestore {
                request.resource.data.verification.iv is string &&
                request.resource.data.verification.iv.size() > 0 &&
                request.resource.data.verification.iv.size() < 100
+             )) &&
+             (!('extraPassword' in request.resource.data) || (
+               request.resource.data.extraPassword is string &&
+               request.resource.data.extraPassword.size() <= 15
+             )) &&
+             (!('securityImageId' in request.resource.data) || (
+               request.resource.data.securityImageId == null ||
+               (request.resource.data.securityImageId is string && request.resource.data.securityImageId.size() < 100)
              ));
     }
     

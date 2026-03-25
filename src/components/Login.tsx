@@ -68,7 +68,7 @@ export default function Login() {
       if (err.code === 'auth/popup-closed-by-user') {
         setError('O login foi cancelado.');
       } else if (err.code === 'auth/unauthorized-domain') {
-        setError('Este domínio não está autorizado no Firebase. Adicione-o na lista de domínios autorizados (Authentication > Settings > Authorized domains).');
+        setError('Este domínio não está autorizado no Firebase. Adicione os domínios do app (ais-dev-... e ais-pre-...) na lista de domínios autorizados (Authentication > Settings > Authorized domains).');
       } else {
         console.error('Erro no Google Sign-In:', err);
         setError(`Ops! Algo deu errado\n${err.message || 'Ocorreu um erro inesperado no login'}`);

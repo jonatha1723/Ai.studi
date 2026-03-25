@@ -10,6 +10,10 @@ interface AuthContextType {
   cryptoKey: CryptoKey | null;
   isAuthReady: boolean;
   needsSetup: boolean;
+  extraPassword: string | null;
+  securityImageId: string | null;
+  updateExtraPassword: (password: string) => Promise<void>;
+  setSecurityImage: (imageId: string | null) => Promise<void>;
   signIn: () => Promise<void>;
   signInEmail: (email: string, password: string) => Promise<void>;
   signUpEmail: (email: string, password: string) => Promise<void>;
@@ -27,27 +31,77 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [extraPassword, setExtraPassword] = useState<string | null>(null);
+  const [securityImageId, setSecurityImageId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // Check if user has a salt in Firestore
-        try {
-          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-          if (!userDoc.exists()) {
-            setNeedsSetup(true);
-          } else {
+        const cachedData = localStorage.getItem(`vault_data_${currentUser.uid}`);
+        
+        if (cachedData) {
+          // INSTANT LOAD FROM CACHE
+          const data = JSON.parse(cachedData);
+          setNeedsSetup(false);
+          setExtraPassword(data.extraPassword || null);
+          setSecurityImageId(data.securityImageId || null);
+          setIsAuthReady(true); // Unblock UI immediately!
+
+          // Update cache in background if online
+          if (navigator.onLine) {
+            try {
+              const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+              if (userDoc.exists()) {
+                const freshData = userDoc.data();
+                setExtraPassword(freshData.extraPassword || null);
+                setSecurityImageId(freshData.securityImageId || null);
+                localStorage.setItem(`vault_data_${currentUser.uid}`, JSON.stringify({
+                  salt: freshData.salt,
+                  verification: freshData.verification,
+                  extraPassword: freshData.extraPassword,
+                  securityImageId: freshData.securityImageId
+                }));
+              }
+            } catch (e) {
+              console.error('Background fetch failed', e);
+            }
+          }
+        } else {
+          // No cache, wait for network
+          try {
+            const userDoc = await Promise.race([
+              getDoc(doc(db, 'users', currentUser.uid)),
+              new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+            ]);
+            if (!userDoc.exists()) {
+              setNeedsSetup(true);
+            } else {
+              setNeedsSetup(false);
+              const data = userDoc.data();
+              setExtraPassword(data.extraPassword || null);
+              setSecurityImageId(data.securityImageId || null);
+              
+              localStorage.setItem(`vault_data_${currentUser.uid}`, JSON.stringify({
+                salt: data.salt,
+                verification: data.verification,
+                extraPassword: data.extraPassword,
+                securityImageId: data.securityImageId
+              }));
+            }
+          } catch (error) {
+            console.error('Erro ao buscar dados do usuário:', error);
             setNeedsSetup(false);
           }
-        } catch (error) {
-          console.error('Erro ao buscar dados do usuário:', error);
+          setIsAuthReady(true);
         }
       } else {
         setCryptoKey(null);
         setNeedsSetup(false);
+        setExtraPassword(null);
+        setSecurityImageId(null);
+        setIsAuthReady(true);
       }
-      setIsAuthReady(true);
     });
     return unsubscribe;
   }, []);
@@ -85,10 +139,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
     try {
       const salt = await generateSalt();
-      const key = await deriveKey(pin, salt);
+      const pinKey = await deriveKey(pin, salt, true);
       
-      // Encrypt a verification string to check the password later
-      const verification = await encryptData('vault-check', key);
+      // Encrypt a verification string to check the PIN later
+      const verification = await encryptData('vault-check', pinKey);
 
       try {
         await setDoc(doc(db, 'users', user.uid), {
@@ -101,8 +155,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
       
-      await saveKeyToLocal(user.uid, key);
-      setCryptoKey(key);
+      localStorage.setItem(`vault_data_${user.uid}`, JSON.stringify({
+        salt,
+        verification,
+        extraPassword: null,
+        securityImageId: null
+      }));
+
+      await saveKeyToLocal(user.uid, pinKey);
+      setCryptoKey(pinKey);
       setNeedsSetup(false);
     } catch (error) {
       console.error('Erro ao configurar o cofre:', error);
@@ -113,49 +174,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const unlockVault = async (pin: string): Promise<boolean> => {
     if (!user) return false;
     try {
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-
-      if (!userDoc.exists()) return false;
+      let data;
+      const cachedData = localStorage.getItem(`vault_data_${user.uid}`);
       
-      const data = userDoc.data();
-      const salt = data.salt;
-      const key = await deriveKey(pin, salt);
-      
-      // Verify the key using the verification string
-      if (data.verification) {
-        try {
-          const check = await decryptData(data.verification.ciphertext, data.verification.iv, key);
-          if (check !== 'vault-check') return false;
-        } catch (e) {
-          return false; // Decryption failed, wrong password
-        }
+      if (cachedData) {
+        data = JSON.parse(cachedData);
       } else {
-        // Fallback for old accounts: try to decrypt the first image
-        const q = query(collection(db, 'images'), where('userId', '==', user.uid), limit(1));
-        const snapshot = await getDocs(q);
-
-        if (!snapshot.empty) {
-          const img = snapshot.docs[0].data();
-          try {
-            await decryptData(img.ciphertext, img.iv, key);
-            // If successful, save verification string for future
-            const verification = await encryptData('vault-check', key);
-            await setDoc(doc(db, 'users', user.uid), { verification }, { merge: true });
-          } catch (e) {
-            // Decryption failed. It could be a wrong password or a corrupted image.
-            // We don't block them from entering, but we don't save the verification string.
-            // They will see "Failed to decrypt" in the gallery and can delete the image.
-            console.warn('Fallback decryption failed. Password might be wrong or image corrupted.');
-          }
-        } else {
-          // Vault is empty, so we can't verify. Just save the verification string for the future.
-          const verification = await encryptData('vault-check', key);
-          await setDoc(doc(db, 'users', user.uid), { verification }, { merge: true });
-        }
+        const userDoc = await Promise.race([
+          getDoc(doc(db, 'users', user.uid)),
+          new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+        ]);
+        if (!userDoc.exists()) return false;
+        data = userDoc.data();
+        localStorage.setItem(`vault_data_${user.uid}`, JSON.stringify({
+          salt: data.salt,
+          verification: data.verification,
+          extraPassword: data.extraPassword,
+          securityImageId: data.securityImageId
+        }));
       }
       
-      await saveKeyToLocal(user.uid, key);
-      setCryptoKey(key);
+      const salt = data.salt;
+      const pinKey = await deriveKey(pin, salt, true);
+      
+      // 1. Verify the PIN
+      if (data.verification) {
+        try {
+          const check = await decryptData(data.verification.ciphertext, data.verification.iv, pinKey);
+          if (check !== 'vault-check') return false;
+        } catch (e) {
+          return false; // Wrong PIN
+        }
+      }
+
+      await saveKeyToLocal(user.uid, pinKey);
+      setCryptoKey(pinKey);
       return true;
     } catch (e) {
       console.error('Erro ao desbloquear o cofre:', e);
@@ -168,6 +221,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await removeKeyFromLocal(user.uid);
     }
     setCryptoKey(null);
+  };
+
+  const updateExtraPassword = async (password: string) => {
+    if (!user) return;
+    try {
+      await setDoc(doc(db, 'users', user.uid), {
+        extraPassword: password
+      }, { merge: true });
+      setExtraPassword(password);
+      
+      const cachedData = localStorage.getItem(`vault_data_${user.uid}`);
+      if (cachedData) {
+        const data = JSON.parse(cachedData);
+        data.extraPassword = password;
+        localStorage.setItem(`vault_data_${user.uid}`, JSON.stringify(data));
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar senha extra:', error);
+      throw error;
+    }
+  };
+
+  const setSecurityImage = async (imageId: string | null) => {
+    if (!user) return;
+    try {
+      await setDoc(doc(db, 'users', user.uid), {
+        securityImageId: imageId
+      }, { merge: true });
+      setSecurityImageId(imageId);
+      
+      const cachedData = localStorage.getItem(`vault_data_${user.uid}`);
+      if (cachedData) {
+        const data = JSON.parse(cachedData);
+        data.securityImageId = imageId;
+        localStorage.setItem(`vault_data_${user.uid}`, JSON.stringify(data));
+      }
+    } catch (error) {
+      console.error('Erro ao definir imagem de segurança:', error);
+      throw error;
+    }
   };
 
   useEffect(() => {
@@ -226,7 +319,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logOut, 
       setupVault, 
       unlockVault, 
-      lockVault 
+      lockVault,
+      extraPassword,
+      securityImageId,
+      updateExtraPassword,
+      setSecurityImage
     }}>
       {children}
     </AuthContext.Provider>
