@@ -943,7 +943,7 @@ export default function Gallery() {
                     transition={{ duration: 0.2 }}
                     src={selectedImage}
                     alt="Full screen"
-                    className="w-full h-full select-none cursor-grab active:cursor-grabbing transition-all duration-300 object-contain"
+                    className="w-full h-full select-none cursor-grab active:cursor-grabbing transition-all duration-300 object-cover"
                     onContextMenu={(e) => e.preventDefault()}
                     draggable={false}
                   />

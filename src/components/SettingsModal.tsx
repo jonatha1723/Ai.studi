@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Shield, HardDrive, User, Clock, Trash2, Check, AlertTriangle, EyeOff, DownloadCloud, Lock, Image as ImageIcon, Key, Download } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { clearImageCache, saveImageToCache } from '../utils/db';
+import { clearImageCache, saveImageToCache, getAllImagesFromCache } from '../utils/db';
+import { decryptData } from '../utils/crypto';
 import { useInstallPrompt } from '../utils/useInstallPrompt';
 import Toast, { ToastType } from './Toast';
 import { collection, getDocs, query, where } from 'firebase/firestore';
@@ -22,12 +23,13 @@ interface SettingsModalProps {
 }
 
 export default function SettingsModal({ isOpen, onClose, images = [] }: SettingsModalProps) {
-  const { user, logOut, extraPassword, securityImageId, updateExtraPassword, setSecurityImage } = useAuth();
+  const { user, logOut, extraPassword, securityImageId, updateExtraPassword, setSecurityImage, cryptoKey } = useAuth();
   const { isInstallable, promptToInstall } = useInstallPrompt();
   const [autoLockTimer, setAutoLockTimer] = useState<string>('15');
   const [privacyMode, setPrivacyMode] = useState<boolean>(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [newExtraPassword, setNewExtraPassword] = useState(extraPassword || '');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isSettingsUnlocked, setIsSettingsUnlocked] = useState(false);
@@ -67,6 +69,21 @@ export default function SettingsModal({ isOpen, onClose, images = [] }: Settings
     setToast({ message, type });
   };
 
+  const handleRemoveFailedImages = async () => {
+    setClearing(true);
+    try {
+      const failedImages = images.filter(img => img.failed);
+      for (const img of failedImages) {
+        await removeImageFromCache(img.id);
+      }
+      showToast(`${failedImages.length} imagens corrompidas removidas`);
+    } catch (error) {
+      showToast('Erro ao remover imagens corrompidas', 'error');
+    } finally {
+      setClearing(false);
+    }
+  };
+
   const handleClearCache = async () => {
     setClearing(true);
     try {
@@ -76,6 +93,39 @@ export default function SettingsModal({ isOpen, onClose, images = [] }: Settings
       showToast('Erro ao limpar cache', 'error');
     } finally {
       setClearing(false);
+    }
+  };
+
+  const handleDownloadAll = async () => {
+    if (!cryptoKey) {
+      showToast('Chave de criptografia não disponível', 'error');
+      return;
+    }
+    setDownloading(true);
+    try {
+      const cachedImages = await getAllImagesFromCache();
+      if (cachedImages.length === 0) {
+        showToast('Nenhuma imagem no cache', 'info');
+        return;
+      }
+      
+      for (const img of cachedImages) {
+        if (img.ciphertext && img.iv) {
+          const decryptedBase64 = await decryptData(img.ciphertext, img.iv, cryptoKey);
+          const link = document.createElement('a');
+          link.href = decryptedBase64;
+          link.download = `image-${img.id}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      }
+      showToast('Download iniciado...');
+    } catch (error) {
+      console.error('Erro ao baixar imagens:', error);
+      showToast('Erro ao baixar imagens', 'error');
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -411,6 +461,32 @@ export default function SettingsModal({ isOpen, onClose, images = [] }: Settings
                             </p>
                           </div>
                         </div>
+                        
+                        <button
+                          onClick={handleRemoveFailedImages}
+                          disabled={clearing || images.filter(i => i.failed).length === 0}
+                          className="w-full py-3 px-4 bg-red-500/10 hover:bg-red-500/20 text-red-500 font-medium rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {clearing ? 'Removendo...' : (
+                            <>
+                              <AlertTriangle size={18} />
+                              Remover Imagens Corrompidas ({images.filter(i => i.failed).length})
+                            </>
+                          )}
+                        </button>
+                        
+                        <button
+                          onClick={handleDownloadAll}
+                          disabled={downloading}
+                          className="w-full py-3 px-4 bg-white text-black hover:bg-zinc-200 font-medium rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {downloading ? 'Baixando...' : (
+                            <>
+                              <Download size={18} />
+                              Baixar Imagens do Cache
+                            </>
+                          )}
+                        </button>
                         
                         <button
                           onClick={handleClearCache}
