@@ -6,7 +6,7 @@ import { encryptData } from '../utils/crypto';
 import { saveImageToCache } from '../utils/db';
 import { useAuth } from '../contexts/AuthContext';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { dbPrimary } from '../firebase';
 import Toast, { ToastType } from './Toast';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -40,10 +40,11 @@ export default function ImageUploader({
       );
 
       for (const file of uniqueFiles) {
-        // 1. Compress image to ensure it fits in Firestore (max 1MB, let's aim for < 700KB)
+        // 1. Compress image to fit in Firestore (max 1MB)
+        // We aim for 0.8MB to be safe and provide high quality
         const options = {
-          maxSizeMB: 0.6,
-          maxWidthOrHeight: 1920,
+          maxSizeMB: 0.8,
+          maxWidthOrHeight: 2560, // 2K resolution
           useWebWorker: true
         };
         
@@ -61,16 +62,16 @@ export default function ImageUploader({
         const { ciphertext, iv } = await encryptData(base64, cryptoKey);
 
         // 4. Save to Firestore
-        const docRef = await addDoc(collection(db, 'images'), {
+        const docRefPrimary = await addDoc(collection(dbPrimary, 'images'), {
           userId: user.uid,
           ciphertext,
           iv,
           createdAt: serverTimestamp()
         });
-
+        
         // 5. Save to local cache
         await saveImageToCache({
-          id: docRef.id,
+          id: docRefPrimary.id,
           ciphertext,
           iv,
           createdAt: new Date()

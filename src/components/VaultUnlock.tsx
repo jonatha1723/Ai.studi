@@ -10,8 +10,8 @@ export default function VaultUnlock() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent | React.KeyboardEvent) => {
+    e?.preventDefault();
     if (pin.length < 6 || pin.length > 30) {
       setError('A senha deve ter entre 6 e 30 caracteres');
       return;
@@ -51,18 +51,34 @@ export default function VaultUnlock() {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-10">
+        <div 
+          className="space-y-10"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleSubmit();
+            }
+          }}
+        >
           <div className="space-y-4">
             <div className="relative group">
               <input
-                type={showPassword ? "text" : "password"}
-                autoFocus
+                type="text"
+                name="secure-input-field"
+                id="secure-input-field"
+                style={{ WebkitTextSecurity: showPassword ? 'none' : 'disc' }}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck="false"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 disabled={loading}
                 className="w-full bg-zinc-900/50 border border-white/10 rounded-2xl py-4 text-center text-xl tracking-[0.2em] font-mono focus:outline-none focus:border-white/30 focus:bg-zinc-800/50 transition-all placeholder:text-zinc-700 placeholder:tracking-normal text-white"
-                placeholder="••••••"
-                required
+                placeholder="Digite aqui"
               />
               <button
                 type="button"
@@ -86,7 +102,8 @@ export default function VaultUnlock() {
 
           <div className="space-y-4">
             <button
-              type="submit"
+              type="button"
+              onClick={() => handleSubmit()}
               disabled={loading}
               className="w-full bg-white text-black font-semibold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98] text-base"
             >
@@ -112,7 +129,7 @@ export default function VaultUnlock() {
               Sair da conta
             </button>
           </div>
-        </form>
+        </div>
 
 
       </motion.div>

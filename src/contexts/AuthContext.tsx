@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { auth, db } from '../firebase';
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, getDoc, setDoc, deleteDoc, serverTimestamp, collection, query, where, limit, getDocs } from 'firebase/firestore';
+import { authPrimary, dbPrimary } from '../firebase';
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signInWithCredential } from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { deriveKey, generateSalt, encryptData, decryptData } from '../utils/crypto';
 import { saveKeyToLocal, getKeyFromLocal, removeKeyFromLocal } from '../utils/db';
 
@@ -35,23 +35,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [securityImageId, setSecurityImageId] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
+    // 1. Instant Recovery: Check for cached offline user identity
+    // This allows the app to bypass the login screen immediately even before Firebase SDK initializes
+    const savedOfflineUser = localStorage.getItem('offline_user');
+    let initialUser: any = null;
+    
+    if (savedOfflineUser) {
+      try {
+        initialUser = JSON.parse(savedOfflineUser);
+        setUser(initialUser);
+        
+        const cachedVaultData = localStorage.getItem(`vault_data_${initialUser.uid}`);
+        if (cachedVaultData) {
+          const data = JSON.parse(cachedVaultData);
+          setNeedsSetup(false);
+          setExtraPassword(data.extraPassword || null);
+          setSecurityImageId(data.securityImageId || null);
+          setIsAuthReady(true); // Instant unblock to VaultUnlock screen
+        }
+      } catch (e) {
+        console.error('Failed to parse offline user', e);
+      }
+    }
+
+    // 2. Auth state listener (Background sync)
+    const unsubscribePrimary = onAuthStateChanged(authPrimary, async (currentUser) => {
       if (currentUser) {
+        // Persist user identity for future offline boots
+        const offlineUserInfo = {
+          uid: currentUser.uid,
+          email: currentUser.email,
+          displayName: currentUser.displayName,
+          photoURL: currentUser.photoURL
+        };
+        localStorage.setItem('offline_user', JSON.stringify(offlineUserInfo));
+        setUser(currentUser);
+        
         const cachedData = localStorage.getItem(`vault_data_${currentUser.uid}`);
         
         if (cachedData) {
-          // INSTANT LOAD FROM CACHE
           const data = JSON.parse(cachedData);
           setNeedsSetup(false);
           setExtraPassword(data.extraPassword || null);
           setSecurityImageId(data.securityImageId || null);
-          setIsAuthReady(true); // Unblock UI immediately!
+          setIsAuthReady(true);
 
-          // Update cache in background if online
           if (navigator.onLine) {
             try {
-              const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+              const userDoc = await getDoc(doc(dbPrimary, 'users', currentUser.uid));
               if (userDoc.exists()) {
                 const freshData = userDoc.data();
                 setExtraPassword(freshData.extraPassword || null);
@@ -68,70 +99,90 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
         } else {
-          // No cache, wait for network
           try {
             const userDoc = await Promise.race([
-              getDoc(doc(db, 'users', currentUser.uid)),
-              new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+              getDoc(doc(dbPrimary, 'users', currentUser.uid)),
+              new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
             ]);
-            if (!userDoc.exists()) {
-              setNeedsSetup(true);
-            } else {
+            
+            if (userDoc && userDoc.exists()) {
               setNeedsSetup(false);
               const data = userDoc.data();
               setExtraPassword(data.extraPassword || null);
               setSecurityImageId(data.securityImageId || null);
-              
               localStorage.setItem(`vault_data_${currentUser.uid}`, JSON.stringify({
                 salt: data.salt,
                 verification: data.verification,
                 extraPassword: data.extraPassword,
                 securityImageId: data.securityImageId
               }));
+            } else {
+              setNeedsSetup(!userDoc || !userDoc.exists());
             }
           } catch (error) {
-            console.error('Erro ao buscar dados do usuário:', error);
-            setNeedsSetup(false);
+            console.error('User data fetch failed:', error);
+            if (!navigator.onLine) setNeedsSetup(false);
           }
           setIsAuthReady(true);
         }
       } else {
-        setCryptoKey(null);
-        setNeedsSetup(false);
-        setExtraPassword(null);
-        setSecurityImageId(null);
+        // ONLY clear session if we are online (meaning the session actually expired)
+        // If offline, we keep the offline_user to allow access to local vault
+        if (navigator.onLine) {
+          setUser(null);
+          localStorage.removeItem('offline_user');
+          setCryptoKey(null);
+          setNeedsSetup(false);
+          setExtraPassword(null);
+          setSecurityImageId(null);
+        }
         setIsAuthReady(true);
       }
     });
-    return unsubscribe;
+
+    // 3. Safety fallback: If no offline user and SDK is slow, show login after a short delay
+    const timeout = setTimeout(() => {
+      if (!isAuthReady) {
+        setIsAuthReady(true);
+      }
+    }, savedOfflineUser ? 5000 : 1500);
+
+    return () => {
+      unsubscribePrimary();
+      clearTimeout(timeout);
+    };
   }, []);
 
   const signIn = async () => {
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      // Login no primário
+      await signInWithPopup(authPrimary, provider);
     } catch (error: any) {
+      console.error("Erro ao autenticar no projeto primário:", error);
       throw error;
     }
   };
 
   const signInEmail = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
+    console.log("Iniciando signInEmail...");
+    await signInWithEmailAndPassword(authPrimary, email, password);
   };
 
   const signUpEmail = async (email: string, password: string) => {
-    await createUserWithEmailAndPassword(auth, email, password);
+    console.log("Iniciando signUpEmail...");
+    await createUserWithEmailAndPassword(authPrimary, email, password);
   };
 
   const resetPassword = async (email: string) => {
-    await sendPasswordResetEmail(auth, email);
+    await sendPasswordResetEmail(authPrimary, email);
   };
 
   const logOut = async () => {
     if (user) {
       await removeKeyFromLocal(user.uid);
     }
-    await signOut(auth);
+    await signOut(authPrimary);
     setCryptoKey(null);
   };
 
@@ -145,7 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const verification = await encryptData('vault-check', pinKey);
 
       try {
-        await setDoc(doc(db, 'users', user.uid), {
+        await setDoc(doc(dbPrimary, 'users', user.uid), {
           salt,
           verification,
           createdAt: serverTimestamp()
@@ -180,10 +231,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (cachedData) {
         data = JSON.parse(cachedData);
       } else {
-        const userDoc = await Promise.race([
-          getDoc(doc(db, 'users', user.uid)),
+        let userDoc = await Promise.race([
+          getDoc(doc(dbPrimary, 'users', user.uid)),
           new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
         ]);
+        
+        if (!userDoc.exists()) {
+        }
+        
         if (!userDoc.exists()) return false;
         data = userDoc.data();
         localStorage.setItem(`vault_data_${user.uid}`, JSON.stringify({
@@ -226,7 +281,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const updateExtraPassword = async (password: string) => {
     if (!user) return;
     try {
-      await setDoc(doc(db, 'users', user.uid), {
+      await setDoc(doc(dbPrimary, 'users', user.uid), {
         extraPassword: password
       }, { merge: true });
       setExtraPassword(password);
@@ -246,7 +301,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const setSecurityImage = async (imageId: string | null) => {
     if (!user) return;
     try {
-      await setDoc(doc(db, 'users', user.uid), {
+      await setDoc(doc(dbPrimary, 'users', user.uid), {
         securityImageId: imageId
       }, { merge: true });
       setSecurityImageId(imageId);

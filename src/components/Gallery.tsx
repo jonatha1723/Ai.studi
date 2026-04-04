@@ -1,15 +1,16 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { collection, query, where, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { collection, query, where, orderBy, onSnapshot, deleteDoc, doc, getDoc } from 'firebase/firestore';
+import { dbPrimary } from '../firebase';
 import { decryptData } from '../utils/crypto';
-import { saveImageToCache, getImageFromCache, removeImageFromCache, getAllImagesFromCache } from '../utils/db';
+import { saveImageToCache, getImageFromCache, removeImageFromCache, getAllImagesFromCache, saveToTrash } from '../utils/db';
 import { useInstallPrompt } from '../utils/useInstallPrompt';
 import ImageUploader from './ImageUploader';
 import ConfirmModal from './ConfirmModal';
+import TrashModal from './TrashModal';
 import SettingsModal from './SettingsModal';
 import Toast, { ToastType } from './Toast';
-import { Lock, LogOut, Trash2, X, Download, Link as LinkIcon, Maximize2, Minimize2, Loader2, Settings, DownloadCloud, Shield, Plus, ChevronLeft, ChevronRight, Check, CheckSquare, Wand2 } from 'lucide-react';
+import { Lock, LogOut, Trash2, X, Download, Maximize2, Minimize2, Maximize, Minimize, Loader2, Settings, DownloadCloud, Shield, Plus, ChevronLeft, ChevronRight, Check, CheckSquare, Wand2 } from 'lucide-react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -29,11 +30,12 @@ interface DecryptedImage {
 
 export default function Gallery() {
   const { user, cryptoKey, logOut, lockVault, isAuthReady, securityImageId, extraPassword, setSecurityImage } = useAuth();
-  const { isInstallable, promptToInstall } = useInstallPrompt();
+  const { isInstallable, promptToInstall, isInIframe } = useInstallPrompt();
   const [images, setImages] = useState<DecryptedImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+  const [imageFit, setImageFit] = useState<'contain' | 'cover'>('contain');
   const [imageToDelete, setImageToDelete] = useState<string | null>(null);
   const [isUploaderOpen, setIsUploaderOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -42,6 +44,7 @@ export default function Gallery() {
   const [selectedForDeletion, setSelectedForDeletion] = useState<string[]>([]);
   const [isDeletingMultiple, setIsDeletingMultiple] = useState(false);
   const [isCleaningDuplicates, setIsCleaningDuplicates] = useState(false);
+  const [isTrashOpen, setIsTrashOpen] = useState(false);
   const [duplicatesToDelete, setDuplicatesToDelete] = useState<string[]>([]);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
   const [showControls, setShowControls] = useState(true);
@@ -51,6 +54,7 @@ export default function Gallery() {
   const [isPromptingExtra, setIsPromptingExtra] = useState<string | null>(null);
   const [isExtraUnlocked, setIsExtraUnlocked] = useState(false);
   const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
   const decryptedCache = useRef<Map<string, string>>(new Map());
 
   const showToast = (message: string, type: ToastType = 'success') => {
@@ -150,6 +154,58 @@ export default function Gallery() {
           setLoading(false);
         }
 
+        // 1.5. Try to re-fetch failed images from Firestore to repair them
+        const failedImages = newDecryptedImages.filter(img => img.failed);
+        if (failedImages.length > 0) {
+          for (const failedImg of failedImages) {
+            if (!isMounted) break;
+            try {
+              const docRef = doc(dbPrimary, 'images', failedImg.id);
+              const docSnap = await getDoc(docRef);
+              if (docSnap.exists()) {
+                const imgData = docSnap.data();
+                let ciphertext = imgData.ciphertext;
+                let iv = imgData.iv;
+                
+                if (!ciphertext && !iv && imgData.data) {
+                  try {
+                    const parsed = JSON.parse(imgData.data);
+                    ciphertext = parsed.ciphertext;
+                    iv = parsed.iv;
+                  } catch (e) {
+                    console.warn('Failed to parse imgData.data during repair', e);
+                  }
+                }
+
+                if (ciphertext && iv) {
+                  const decryptedBase64 = await decryptData(ciphertext, iv, cryptoKey);
+                  // Success! Update cache and state
+                  await saveImageToCache({
+                    id: failedImg.id,
+                    ciphertext,
+                    iv,
+                    createdAt: imgData.createdAt
+                  });
+                  decryptedCache.current.set(failedImg.id, decryptedBase64);
+                  if (isMounted) {
+                    setImages(prev => prev.map(img => 
+                      img.id === failedImg.id ? { ...img, url: decryptedBase64, failed: false } : img
+                    ));
+                  }
+                }
+              } else {
+                // Image doesn't exist in Firestore anymore, remove from cache
+                await removeImageFromCache(failedImg.id);
+                if (isMounted) {
+                  setImages(prev => prev.filter(img => img.id !== failedImg.id));
+                }
+              }
+            } catch (e) {
+              console.error('Failed to repair image', failedImg.id, e);
+            }
+          }
+        }
+
         // 2. Listen ONLY for new images in Firestore to save reads
         let latestDate = null;
         if (cachedImages.length > 0) {
@@ -159,14 +215,14 @@ export default function Gallery() {
         let q;
         if (latestDate) {
           q = query(
-            collection(db, 'images'),
+            collection(dbPrimary, 'images'),
             where('userId', '==', user.uid),
             where('createdAt', '>', latestDate),
             orderBy('createdAt', 'desc')
           );
         } else {
           q = query(
-            collection(db, 'images'),
+            collection(dbPrimary, 'images'),
             where('userId', '==', user.uid),
             orderBy('createdAt', 'desc')
           );
@@ -196,6 +252,16 @@ export default function Gallery() {
             try {
               let ciphertext = img.ciphertext;
               let iv = img.iv;
+
+              if (!ciphertext && !iv && img.data) {
+                try {
+                  const parsed = JSON.parse(img.data);
+                  ciphertext = parsed.ciphertext;
+                  iv = parsed.iv;
+                } catch (e) {
+                  console.warn('Failed to parse img.data', e);
+                }
+              }
 
               // Save new image to local cache
               await saveImageToCache({
@@ -336,13 +402,21 @@ export default function Gallery() {
     setImageToDelete(null);
 
     try {
+      const cachedImage = await getImageFromCache(id);
+      if (cachedImage) {
+        await saveToTrash({
+          ...cachedImage,
+          deletedAt: Date.now()
+        });
+      }
+
       await removeImageFromCache(id);
       try {
-        await deleteDoc(doc(db, 'images', id));
+        await deleteDoc(doc(dbPrimary, 'images', id));
       } catch (e) {
         console.warn('Firestore delete failed, might already be deleted:', e);
       }
-      showToast('Imagem excluída com sucesso!');
+      showToast('Imagem movida para a lixeira!');
     } catch (error) {
       console.error('Erro ao excluir imagem:', error);
       showToast('Erro ao excluir imagem.', 'error');
@@ -361,14 +435,22 @@ export default function Gallery() {
 
     try {
       for (const id of ids) {
+        const cachedImage = await getImageFromCache(id);
+        if (cachedImage) {
+          await saveToTrash({
+            ...cachedImage,
+            deletedAt: Date.now()
+          });
+        }
+
         await removeImageFromCache(id);
         try {
-          await deleteDoc(doc(db, 'images', id));
+          await deleteDoc(doc(dbPrimary, 'images', id));
         } catch (e) {
           console.warn(`Firestore delete failed for ${id}:`, e);
         }
       }
-      showToast(`${ids.length} imagens excluídas com sucesso!`);
+      showToast(`${ids.length} imagens movidas para a lixeira!`);
     } catch (error) {
       console.error('Erro ao excluir imagens:', error);
       showToast('Erro ao excluir imagens.', 'error');
@@ -389,14 +471,22 @@ export default function Gallery() {
 
     try {
       for (const id of ids) {
+        const cachedImage = await getImageFromCache(id);
+        if (cachedImage) {
+          await saveToTrash({
+            ...cachedImage,
+            deletedAt: Date.now()
+          });
+        }
+
         await removeImageFromCache(id);
         try {
-          await deleteDoc(doc(db, 'images', id));
+          await deleteDoc(doc(dbPrimary, 'images', id));
         } catch (e) {
           console.warn(`Firestore delete failed for ${id}:`, e);
         }
       }
-      showToast(`${ids.length} duplicatas removidas com sucesso!`);
+      showToast(`${ids.length} duplicatas movidas para a lixeira!`);
     } catch (error) {
       console.error('Erro ao limpar duplicatas:', error);
       showToast('Erro ao limpar duplicatas.', 'error');
@@ -428,8 +518,8 @@ export default function Gallery() {
     window.history.replaceState({}, '', url);
   };
 
-  const handleExtraPasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleExtraPasswordSubmit = (e?: React.FormEvent | React.KeyboardEvent) => {
+    e?.preventDefault();
     if (extraPasswordInput === extraPassword) {
       setIsExtraUnlocked(true);
       const img = images.find(i => i.id === isPromptingExtra);
@@ -478,6 +568,11 @@ export default function Gallery() {
         cancelText="Cancelar"
       />
       
+      <TrashModal 
+        isOpen={isTrashOpen} 
+        onClose={() => setIsTrashOpen(false)} 
+      />
+
       <header className="sticky top-0 z-40 bg-[#050505]/80 backdrop-blur-2xl border-b border-white/5 px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <button 
@@ -510,14 +605,16 @@ export default function Gallery() {
             onClick={() => {
               if (isInstallable) {
                 promptToInstall();
+              } else if (isInIframe) {
+                showToast('Abra em uma nova aba para instalar o app.', 'info');
               } else {
                 showToast('Para instalar: use o menu do navegador "Adicionar à Tela de Início" ou o ícone na barra de endereços.', 'info');
               }
             }}
-            className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-white/10 text-white hover:bg-white/20 rounded-full transition-colors text-sm font-medium mr-2"
+            className="flex items-center gap-2 px-3 py-1.5 bg-white/10 text-white hover:bg-white/20 rounded-full transition-colors text-sm font-medium mr-1 sm:mr-2"
           >
             <DownloadCloud size={16} />
-            Instalar App
+            <span className="hidden sm:inline">Instalar App</span>
           </button>
           <button
             onClick={lockVault}
@@ -550,7 +647,7 @@ export default function Gallery() {
             className="text-center py-32 sm:py-48 text-zinc-500 space-y-6 px-4 flex flex-col items-center"
           >
             <div className="relative">
-              <div className="absolute inset-0 bg-white/10 blur-3xl rounded-full" />
+              {/* <div className="absolute inset-0 bg-white/10 blur-3xl rounded-full" /> */}
               <div className="relative w-24 h-24 bg-gradient-to-b from-white/10 to-white/5 rounded-[2rem] flex items-center justify-center border border-white/10 shadow-2xl">
                 <Shield size={40} className="text-white/50" strokeWidth={1.5} />
               </div>
@@ -582,7 +679,7 @@ export default function Gallery() {
                 ) : img.id === securityImageId && !isExtraUnlocked && extraPassword ? (
                   <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 text-zinc-500 group-hover:text-white transition-colors">
                     <div className="relative">
-                      <div className="absolute inset-0 bg-white/5 blur-xl rounded-full" />
+                      {/* <div className="absolute inset-0 bg-white/5 blur-xl rounded-full" /> */}
                       <Lock size={32} className="relative z-10" strokeWidth={1.5} />
                     </div>
                     <span className="mt-3 text-[10px] font-bold uppercase tracking-widest opacity-50">Protegida</span>
@@ -635,7 +732,7 @@ export default function Gallery() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setIsUploaderOpen(true)}
-            className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 h-14 sm:h-16 px-4 sm:px-6 bg-white text-black rounded-full shadow-[0_0_40px_rgba(255,255,255,0.3)] flex items-center justify-center z-40 gap-2 sm:gap-3 font-medium transition-all border border-white/20"
+            className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 h-14 sm:h-16 px-4 sm:px-6 bg-white text-black rounded-full shadow-xl flex items-center justify-center z-40 gap-2 sm:gap-3 font-medium transition-all border border-white/20"
           >
             <Plus size={24} className="sm:w-6 sm:h-6" strokeWidth={2.5} />
             <span className="hidden sm:block text-base font-bold tracking-tight pr-2">Adicionar Fotos</span>
@@ -730,13 +827,31 @@ export default function Gallery() {
                 <h2 className="text-xl font-bold text-white tracking-tight">Imagem Protegida</h2>
                 <p className="text-sm text-zinc-500">Esta imagem requer uma senha extra para ser visualizada.</p>
               </div>
-              <form onSubmit={handleExtraPasswordSubmit} className="space-y-4">
+              <div 
+                className="space-y-4"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleExtraPasswordSubmit();
+                  }
+                }}
+              >
                 <input
                   autoFocus
-                  type="password"
+                  type="text"
+                  name="extra-secure-input"
+                  id="extra-secure-input"
+                  style={{ WebkitTextSecurity: 'disc' }}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck="false"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
                   value={extraPasswordInput}
                   onChange={(e) => setExtraPasswordInput(e.target.value)}
-                  placeholder="Digite a Senha Extra"
+                  placeholder="Digite aqui"
                   className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white text-center placeholder:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-white/20 transition-all"
                 />
                 <div className="flex gap-2">
@@ -751,13 +866,14 @@ export default function Gallery() {
                     Cancelar
                   </button>
                   <button
-                    type="submit"
+                    type="button"
+                    onClick={() => handleExtraPasswordSubmit()}
                     className="flex-1 py-3 bg-white text-black font-bold rounded-xl hover:bg-zinc-200 transition-all"
                   >
                     Desbloquear
                   </button>
                 </div>
-              </form>
+              </div>
             </motion.div>
           </motion.div>
         )}
@@ -775,13 +891,19 @@ export default function Gallery() {
           >
             <div
               onClick={() => !isUploading && setIsUploaderOpen(false)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/80"
             />
             <motion.div
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              transition={{ 
+                type: "spring", 
+                damping: 30, 
+                stiffness: 300,
+                mass: 0.8
+              }}
+              style={{ willChange: "transform" }}
               className="relative w-full max-w-lg bg-[#0a0a0a] rounded-t-[2.5rem] md:rounded-[2.5rem] shadow-2xl overflow-hidden border-t md:border border-white/10 flex flex-col h-[85dvh] md:h-auto md:max-h-[90vh] ring-1 ring-white/5"
             >
               <div className="p-4 sm:p-6 border-b border-white/10 flex items-center justify-between shrink-0">
@@ -859,15 +981,12 @@ export default function Gallery() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      const url = new URL(window.location.href);
-                      url.searchParams.set('image', selectedImageId || '');
-                      navigator.clipboard.writeText(url.toString());
-                      showToast('Link copiado para a área de transferência!');
+                      setImageFit(prev => prev === 'contain' ? 'cover' : 'contain');
                     }}
                     className="text-white/70 hover:text-white transition-colors p-2 sm:p-3 bg-black/40 backdrop-blur-md rounded-full hover:bg-black/60 active:scale-90"
-                    title="Copiar Link"
+                    title={imageFit === 'contain' ? "Preencher Tela" : "Ajustar à Tela"}
                   >
-                    <LinkIcon size={20} className="sm:w-6 sm:h-6" />
+                    {imageFit === 'contain' ? <Maximize size={20} className="sm:w-6 sm:h-6" /> : <Minimize size={20} className="sm:w-6 sm:h-6" />}
                   </button>
                   <a 
                     href={selectedImage} 
@@ -910,17 +1029,37 @@ export default function Gallery() {
               }}
               onTouchStart={(e) => {
                 touchStartX.current = e.touches[0].clientX;
+                touchStartY.current = e.touches[0].clientY;
               }}
               onTouchEnd={(e) => {
-                if (!touchStartX.current || isZoomed) return;
+                if (!touchStartX.current || !touchStartY.current || isZoomed) return;
                 const touchEndX = e.changedTouches[0].clientX;
-                const distance = touchStartX.current - touchEndX;
-                if (distance > 50) {
-                  handleNextImage();
-                } else if (distance < -50) {
-                  handlePrevImage();
+                const touchEndY = e.changedTouches[0].clientY;
+                const distanceX = touchStartX.current - touchEndX;
+                const distanceY = touchStartY.current - touchEndY;
+                
+                if (Math.abs(distanceX) > Math.abs(distanceY)) {
+                  // Horizontal swipe
+                  if (distanceX > 50) {
+                    handleNextImage();
+                  } else if (distanceX < -50) {
+                    handlePrevImage();
+                  }
+                } else {
+                  // Vertical swipe
+                  if (distanceY < -50 || distanceY > 50) {
+                    if (document.fullscreenElement && document.exitFullscreen) {
+                      document.exitFullscreen().catch(console.error);
+                    }
+                    setSelectedImage(null);
+                    setSelectedImageId(null);
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('image');
+                    window.history.replaceState({}, '', url);
+                  }
                 }
                 touchStartX.current = null;
+                touchStartY.current = null;
               }}
             >
               <TransformWrapper
@@ -934,7 +1073,12 @@ export default function Gallery() {
                 onZoomStop={(ref) => setIsZoomed(ref.state.scale > 1)}
                 onInit={(ref) => setIsZoomed(ref.state.scale > 1)}
               >
-                <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full !h-full flex items-center justify-center">
+                <TransformComponent 
+                  wrapperClass="!w-full !h-full" 
+                  contentClass="!w-full !h-full flex items-center justify-center"
+                  wrapperStyle={{ width: "100%", height: "100%" }}
+                  contentStyle={{ width: "100%", height: "100%" }}
+                >
                   <motion.img
                     key={selectedImageId}
                     initial={{ opacity: 0, x: 20 }}
@@ -943,7 +1087,7 @@ export default function Gallery() {
                     transition={{ duration: 0.2 }}
                     src={selectedImage}
                     alt="Full screen"
-                    className="w-full h-full select-none cursor-grab active:cursor-grabbing transition-all duration-300 object-cover"
+                    className={`w-full h-full select-none cursor-grab active:cursor-grabbing transition-all duration-300 ${imageFit === 'cover' ? 'object-cover' : 'object-contain'}`}
                     onContextMenu={(e) => e.preventDefault()}
                     draggable={false}
                   />
@@ -999,6 +1143,7 @@ export default function Gallery() {
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)} 
         images={images}
+        onOpenTrash={() => setIsTrashOpen(true)}
       />
     </div>
   );

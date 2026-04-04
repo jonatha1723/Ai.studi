@@ -20,8 +20,8 @@ function AppContent() {
   if (!isAuthReady) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center relative overflow-hidden">
-        {/* Subtle background glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-white/5 blur-[100px] rounded-full" />
+        {/* Subtle background glow - Removed to fix 'white dot' issue */}
+        {/* <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-white/5 blur-[100px] rounded-full" /> */}
         
         <div className="relative">
           <motion.div

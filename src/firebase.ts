@@ -3,8 +3,8 @@ import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth'
 import { getFirestore, doc, getDocFromServer, enableIndexedDbPersistence } from 'firebase/firestore';
 import localConfig from '../firebase-applet-config.json';
 
-// 1. Tenta carregar as variáveis de ambiente (Usado na Vercel)
-const envConfig = {
+// 1. Tenta carregar as variáveis de ambiente
+const primaryConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
@@ -15,35 +15,17 @@ const envConfig = {
 };
 
 // Se a chave da API existir no .env, usa o .env. Senão, usa o arquivo local.
-const firebaseConfig = envConfig.apiKey ? envConfig : localConfig;
+const firebaseConfigPrimary = primaryConfig.apiKey ? primaryConfig : localConfig;
 
-console.log("Firebase Config Loaded:", firebaseConfig);
+// Initialize Apps
+const appPrimary = initializeApp(firebaseConfigPrimary, 'primary');
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
+export const authPrimary = getAuth(appPrimary);
+export const dbPrimary = getFirestore(appPrimary, firebaseConfigPrimary.firestoreDatabaseId || '(default)');
 
 // Set Auth persistence
-setPersistence(auth, browserLocalPersistence).catch((error) => {
-  console.error("Error setting auth persistence:", error);
-});
+setPersistence(authPrimary, browserLocalPersistence).catch(console.error);
 
-// Enable Firestore persistence
-enableIndexedDbPersistence(db).catch((err) => {
-  if (err.code == 'failed-precondition') {
-    console.warn('Multiple tabs open, persistence can only be enabled in one tab at a time.');
-  } else if (err.code == 'unimplemented') {
-    console.warn('The current browser does not support all of the persistence features.');
-  }
-});
+// Enable Firestore persistence (Primary only for now to avoid conflicts)
+enableIndexedDbPersistence(dbPrimary).catch(console.warn);
 
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if(error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration. ");
-    }
-  }
-}
-testConnection();

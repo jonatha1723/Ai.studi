@@ -12,8 +12,11 @@ interface BeforeInstallPromptEvent extends Event {
 export function useInstallPrompt() {
   const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstallable, setIsInstallable] = useState(false);
+  const [isInIframe, setIsInIframe] = useState(false);
 
   useEffect(() => {
+    setIsInIframe(window.self !== window.top);
+
     const handler = (e: Event) => {
       e.preventDefault();
       setPromptEvent(e as BeforeInstallPromptEvent);
@@ -34,5 +37,5 @@ export function useInstallPrompt() {
     }
   };
 
-  return { isInstallable, promptToInstall };
+  return { isInstallable, promptToInstall, isInIframe };
 }

@@ -113,10 +113,26 @@ service cloud.firestore {
              isTimestamp('createdAt');
     }
 
+    function isValidSharedImage() {
+      return hasOnlyAllowedFields(['ownerId', 'ciphertext', 'iv', 'salt', 'createdAt']) &&
+             hasRequiredFields(['ownerId', 'ciphertext', 'iv', 'salt', 'createdAt']) &&
+             request.resource.data.ownerId == request.auth.uid &&
+             request.resource.data.ciphertext is string &&
+             request.resource.data.ciphertext.size() > 0 &&
+             request.resource.data.ciphertext.size() < 1048576 && // Max 1MB
+             validStringLength('iv', 10, 50) &&
+             validStringLength('salt', 10, 100) &&
+             isTimestamp('createdAt');
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
     
+    match /test/connection {
+      allow read: if true;
+    }
+
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId) && isValidUser() && isRecent('createdAt');
@@ -130,6 +146,11 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isValidImage() && isRecent('createdAt');
       allow update: if isDocOwner() && isValidImage() && areImmutableFieldsUnchanged(['userId', 'createdAt']);
       allow delete: if resource == null || isDocOwner() || isAdmin();
+    }
+    match /shared_images/{shareId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidSharedImage() && isRecent('createdAt');
+      allow delete: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
     }
   }
 }

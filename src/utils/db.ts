@@ -14,19 +14,32 @@ interface VaultDB extends DBSchema {
       createdAt: any;
     };
   };
+  trash: {
+    key: string; // image id
+    value: {
+      id: string;
+      ciphertext: string;
+      iv: string;
+      createdAt: any;
+      deletedAt: number;
+    };
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<VaultDB>> | null = null;
 
 export async function getDB() {
   if (!dbPromise) {
-    dbPromise = openDB<VaultDB>('secure-vault-db', 1, {
-      upgrade(db) {
+    dbPromise = openDB<VaultDB>('secure-vault-db', 2, {
+      upgrade(db, oldVersion, newVersion, transaction) {
         if (!db.objectStoreNames.contains('keys')) {
           db.createObjectStore('keys');
         }
         if (!db.objectStoreNames.contains('images')) {
           db.createObjectStore('images', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('trash')) {
+          db.createObjectStore('trash', { keyPath: 'id' });
         }
       },
     });
@@ -74,4 +87,25 @@ export async function clearImageCache() {
 export async function getAllImagesFromCache() {
   const db = await getDB();
   return db.getAll('images');
+}
+
+// Trash Management
+export async function saveToTrash(item: { id: string, ciphertext: string, iv: string, createdAt: any, deletedAt: number }) {
+  const db = await getDB();
+  await db.put('trash', item);
+}
+
+export async function getTrashItems() {
+  const db = await getDB();
+  return db.getAll('trash');
+}
+
+export async function removeFromTrash(id: string) {
+  const db = await getDB();
+  await db.delete('trash', id);
+}
+
+export async function clearTrash() {
+  const db = await getDB();
+  await db.clear('trash');
 }
