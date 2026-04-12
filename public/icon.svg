@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a8a" />
+      <stop offset="100%" stop-color="#1e40af" />
+    </linearGradient>
+  </defs>
+  <!-- Background: Solid professional blue square -->
+  <rect width="512" height="512" fill="url(#bgGrad)"/>
+  
+  <!-- Gallery Symbol: Matching the screenshot style -->
+  <g transform="translate(128, 128)">
+    <!-- Outer frame of the image icon -->
+    <rect x="0" y="0" width="256" height="256" rx="32" fill="none" stroke="white" stroke-width="20" stroke-opacity="0.9"/>
+    
+    <!-- Mountains/Landscape -->
+    <path d="M40 216 L100 120 L160 180 L200 140 L216 160 L216 216 Z" fill="white" fill-opacity="0.9"/>
+    
+    <!-- Sun/Dot -->
+    <circle cx="180" cy="80" r="24" fill="white" fill-opacity="0.9"/>
+  </g>
+</svg>

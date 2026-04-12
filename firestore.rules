@@ -1,0 +1,160 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId} (matches request.auth.uid)
+    // Fields:
+    //   - salt: string (required, 10-100 chars) - Base64 salt for key derivation
+    //   - createdAt: timestamp (required, immutable) - Creation time
+    //   - verification: map (optional) - Password verification data
+    //     - ciphertext: string (required, < 1000 chars)
+    //     - iv: string (required, < 100 chars)
+    //
+    // Collection: images
+    // Document ID: {imageId} (auto-generated)
+    // Fields:
+    //   - userId: string (required, immutable, matches request.auth.uid) - Owner ID
+    //   - ciphertext: string (required, < 1MB) - Encrypted image data
+    //   - iv: string (required, 10-50 chars) - Initialization vector
+    //   - createdAt: timestamp (required, immutable) - Upload time
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "jogonesteterp@gmail.com" && request.auth.token.email_verified == true));
+    }
+    
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+    
+    function validStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+    
+    function isTimestamp(field) {
+      return request.resource.data[field] is timestamp;
+    }
+
+    function isRecent(field) {
+      return request.resource.data[field] == request.time;
+    }
+    
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUser() {
+      return hasOnlyAllowedFields(['salt', 'createdAt', 'verification', 'extraPassword', 'securityImageId']) &&
+             hasRequiredFields(['salt', 'createdAt']) &&
+             validStringLength('salt', 10, 100) &&
+             isTimestamp('createdAt') &&
+             (!('verification' in request.resource.data) || (
+               request.resource.data.verification is map &&
+               request.resource.data.verification.keys().hasAll(['ciphertext', 'iv']) &&
+               request.resource.data.verification.keys().hasOnly(['ciphertext', 'iv']) &&
+               request.resource.data.verification.ciphertext is string &&
+               request.resource.data.verification.ciphertext.size() > 0 &&
+               request.resource.data.verification.ciphertext.size() < 1000 &&
+               request.resource.data.verification.iv is string &&
+               request.resource.data.verification.iv.size() > 0 &&
+               request.resource.data.verification.iv.size() < 100
+             )) &&
+             (!('extraPassword' in request.resource.data) || (
+               request.resource.data.extraPassword is string &&
+               request.resource.data.extraPassword.size() <= 15
+             )) &&
+             (!('securityImageId' in request.resource.data) || (
+               request.resource.data.securityImageId == null ||
+               (request.resource.data.securityImageId is string && request.resource.data.securityImageId.size() < 100)
+             ));
+    }
+    
+    function isValidImage() {
+      return hasOnlyAllowedFields(['userId', 'ciphertext', 'iv', 'createdAt']) &&
+             hasRequiredFields(['userId', 'ciphertext', 'iv', 'createdAt']) &&
+             request.resource.data.userId == request.auth.uid &&
+             request.resource.data.ciphertext is string &&
+             request.resource.data.ciphertext.size() > 0 &&
+             request.resource.data.ciphertext.size() < 1048576 && // Max 1MB
+             validStringLength('iv', 10, 50) &&
+             isTimestamp('createdAt');
+    }
+
+    function isValidSharedImage() {
+      return hasOnlyAllowedFields(['ownerId', 'ciphertext', 'iv', 'salt', 'createdAt']) &&
+             hasRequiredFields(['ownerId', 'ciphertext', 'iv', 'salt', 'createdAt']) &&
+             request.resource.data.ownerId == request.auth.uid &&
+             request.resource.data.ciphertext is string &&
+             request.resource.data.ciphertext.size() > 0 &&
+             request.resource.data.ciphertext.size() < 1048576 && // Max 1MB
+             validStringLength('iv', 10, 50) &&
+             validStringLength('salt', 10, 100) &&
+             isTimestamp('createdAt');
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    
+    match /test/connection {
+      allow read: if true;
+    }
+
+    match /config/app {
+      allow read: if true;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser() && isRecent('createdAt');
+      allow update: if isOwner(userId) && isValidUser() && areImmutableFieldsUnchanged(['createdAt', 'salt']);
+      allow delete: if isAdmin(); // Only admin can delete users for safety
+    }
+    
+    match /images/{imageId} {
+      allow get: if resource == null || isDocOwner() || isAdmin();
+      allow list: if isDocOwner() || isAdmin();
+      allow create: if isAuthenticated() && isValidImage() && isRecent('createdAt');
+      allow update: if isDocOwner() && isValidImage() && areImmutableFieldsUnchanged(['userId', 'createdAt']);
+      allow delete: if resource == null || isDocOwner() || isAdmin();
+    }
+    match /shared_images/{shareId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidSharedImage() && isRecent('createdAt');
+      allow delete: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
+    }
+  }
+}

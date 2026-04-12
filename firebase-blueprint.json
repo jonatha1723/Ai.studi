@@ -1,0 +1,65 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile containing the encryption salt and verification string.",
+      "type": "object",
+      "properties": {
+        "salt": {
+          "type": "string",
+          "description": "Base64 encoded salt used for PBKDF2 key derivation."
+        },
+        "verification": {
+          "type": "object",
+          "description": "Encrypted string used to verify the vault password.",
+          "properties": {
+            "ciphertext": { "type": "string" },
+            "iv": { "type": "string" }
+          },
+          "required": ["ciphertext", "iv"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the user was created."
+        }
+      },
+      "required": ["salt", "createdAt"]
+    },
+    "EncryptedImage": {
+      "title": "EncryptedImage",
+      "description": "An encrypted image stored by a user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user who owns this image."
+        },
+        "ciphertext": {
+          "type": "string",
+          "description": "Base64 encoded encrypted image data."
+        },
+        "iv": {
+          "type": "string",
+          "description": "Base64 encoded initialization vector used for encryption."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the image was uploaded."
+        }
+      },
+      "required": ["userId", "ciphertext", "iv", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles and their encryption salts."
+    },
+    "/images/{imageId}": {
+      "schema": { "$ref": "#/entities/EncryptedImage" },
+      "description": "Stores the encrypted images."
+    }
+  }
+}

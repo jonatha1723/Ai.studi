@@ -1,0 +1,5 @@
+{
+  "name": "Cloud Gallery",
+  "description": "Armazenamento em nuvem com criptografia de ponta a ponta.",
+  "requestFramePermissions": []
+}
