@@ -29,25 +29,14 @@ interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const currentUser = authPrimary.currentUser;
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: currentUser?.uid,
-      email: currentUser?.email,
-      emailVerified: currentUser?.emailVerified,
-      isAnonymous: currentUser?.isAnonymous,
-      tenantId: currentUser?.tenantId,
-      providerInfo: currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
-    operationType,
-    path
+  const errInfo = {
+    message: error instanceof Error ? error.message : String(error),
+    operation: operationType,
+    // Path is safe to keep for debugging, but we remove personal data
+    timestamp: new Date().toISOString()
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  
+  console.error('[Cloud Gallery] Registro de Falha Operacional:', errInfo);
+  // Throwing a clean error message that doesn't leak secrets
+  throw new Error(`Erro no Banco de Dados (${operationType}): ${errInfo.message}`);
 }
